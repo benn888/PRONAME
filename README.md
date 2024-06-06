@@ -1,4 +1,7 @@
-# PRONAME
+# PRONAME: PROcessing NAnopore MEtabarcoding data
+
+![PRONAME_logo](./images/PRONAME logo.pdf?raw=true "PRONAME workflow")
+
 # Installation
 
 If you don't have [miniconda3](https://docs.anaconda.com/free/miniconda/) installed, please execute the following commands to install it:

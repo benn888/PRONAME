@@ -57,7 +57,7 @@ The Nanopore sequencing data to import into PRONAME must be fastq files, i.e. ba
 
 ## 1. proname_import
 
-The first step is to import sequencing data into PRONAME. Since adapter and primer sequences have not been removed yet, the `trimadapters` and `trimprimers` arguments are set to "yes" and the primer sequences are provided (5'-3'). The V14 sequencing chemistry was used, so the `duplex` argument is set to "yes", so that seperate length-vs-quality scatterplots are generated for simplex, duplex and simplex+duplex reads.
+The first step is to import sequencing data into PRONAME. Since adapter and primer sequences have not been removed yet, the `--trimadapters` and `--trimprimers` arguments are set to "yes" and the primer sequences are provided (5'-3'). Given that the V14 sequencing chemistry was used, the `--duplex` argument is set to "yes", so that seperate length-vs-quality scatterplots are generated for simplex, duplex and simplex+duplex reads.
 
 ~~~
 proname_import \
@@ -72,17 +72,17 @@ proname_import \
 
 Here is the complete list of available arguments for `proname_import`:
 
-| Command | Arguments | Description |
-| ------- | --------- | ----------- |
-| proname_import | --inputpath | Path to the folder containing raw fastq files. |
-|  | --threads | Number of threads to use for the Guppy adapter-trimming step and/or the Cutadapt primmer-trimming step. |
-|  | --duplex | Indicate whether your sequencing data include duplex reads or not. Duplex reads are high-quality reads that were introduced with the kit 14 chemistry. [Option: "yes" or "no"] |
-|  | --trimadapters | Indicate whether your sequencing data contain adapters that should be trimmed. [Option: "yes" or "no"] |
-|  | --trimprimers | Indicate whether your sequencing data contain primers that should be trimmed. [Option: "yes" or "no"] |
-|  | --fwdprimer | The sequence of the forward primer used during PCR to amplify DNA. If barcoded primers were used to multiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. This argument is required if --trimprimers is set to "yes". |
-|  | --revprimer | The sequence of the reverse primer used during PCR to amplify DNA. If barcoded primers were used to multiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. This argument is required if --trimprimers is set to "yes". |
-|  | --version | Print the version of the pipeline. |
-|  | --help | Print the help menu. |
+| Command | Arguments | Description | Mandatory argument |
+| ------- | --------- | ----------- | ------------------ |
+| proname_import | --inputpath | Path to the folder containing raw fastq files. | X |
+|  | --threads | Number of threads to use for the Guppy adapter-trimming step and/or the Cutadapt primmer-trimming step. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] |  |
+|  | --duplex | Indicate whether your sequencing data include duplex reads or not. Duplex reads are high-quality reads that were introduced with the kit 14 chemistry. [Option: "yes" or "no"] | X |
+|  | --trimadapters | Indicate whether your sequencing data contain adapters that should be trimmed. [Option: "yes" or "no"] | X |
+|  | --trimprimers | Indicate whether your sequencing data contain primers that should be trimmed. [Option: "yes" or "no"] | X |
+|  | --fwdprimer | The sequence of the forward primer used during PCR to amplify DNA. If barcoded primers were used to multiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. This argument is required if --trimprimers is set to "yes". | ~ |
+|  | --revprimer | The sequence of the reverse primer used during PCR to amplify DNA. If barcoded primers were used to multiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. This argument is required if --trimprimers is set to "yes". | ~ |
+|  | --version | Print the version of the pipeline. |  |
+|  | --help | Print the help menu. |  |
 
 
 

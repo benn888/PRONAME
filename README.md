@@ -73,7 +73,7 @@ proname_import \
 Here is the complete list of available arguments for `proname_import`:
 
 | Command | Arguments | Description | Mandatory arguments |
-| ------- | --------- | ----------- | ------------------ |
+| ------- | --------- | ----------- | ------------------- |
 | proname_import | --inputpath | Path to the folder containing raw fastq files. | X |
 |  | --threads | Number of threads to use for the Guppy adapter-trimming step and/or the Cutadapt primmer-trimming step. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] |  |
 |  | --duplex | Indicate whether your sequencing data include duplex reads or not. Duplex reads are high-quality reads that were introduced with the kit 14 chemistry. [Option: "yes" or "no"] | X |
@@ -99,9 +99,9 @@ The analysis of the `simplex_duplex_read_distribution.tsv` generated file shows 
 | sample8 | 476416 | 101848 |
 | sample9 | 711157 | 55596 |
 
-We can thus work only with duplex reads and discard simplex reads. Analyzing the `` file helps determine which length and quality thresholds to choose at the following step:
+We can thus work only with duplex reads and discard simplex reads. Analyzing the `LengthvsQualityScatterPlot_duplex.png` file helps determine which length and quality thresholds to choose at the following step:
 
-
+![Duplex_scatterplot](./images/LengthvsQualityScatterPlot_duplex.png?raw=true "Duplex_scatterplot")
 
 ## 2. proname_filter
 
@@ -120,7 +120,7 @@ proname_filter \
 Here is the complete list of available arguments for `proname_filter`:
 
 | Command | Arguments | Description | Mandatory arguments |
-| ------- | --------- | ----------- | ------------------ |
+| ------- | --------- | ----------- | ------------------- |
 | proname_filter | --datatype | Indicate whether you want to work with simplex reads, duplex reads or both. [Option: "simplex", "duplex" or "both"] | X |
 |  | --filtminlen | Reads with a length below this threshold will be discarded during quality filtering. [Option: integer] | X |
 |  | --filtmaxlen | Reads with a length above this threshold will be discarded during quality filtering. [Option: integer] | X |
@@ -133,11 +133,21 @@ Here is the complete list of available arguments for `proname_filter`:
 
 The `` file indicates how many high-quality duplex reads remained after filtering:
 
-| Samples | HQ Duplex reads |
-| ------- | --------------- |
+| Sample_name | HQ_duplex_reads |
+| ----------- | --------------- |
+| sample10 | 21326 |
+| sample1 | 49029 |
+| sample2 | 24610 |
+| sample3 | 41600 |
+| sample4 | 11212 |
+| sample5 | 17422 |
+| sample6 | 38546 |
+| sample7 | 32267 |
+| sample8 | 73018 |
+| sample9 | 31843 |
 
 
-The new scatterplot `` allows visualizing the impact of these filterings on the read quality and length distributions:
+The new scatterplot `LengthvsQualityScatterPlot_HQ_duplex.png` allows visualizing the impact of these filterings on the read quality and length distributions:
 
 
 
@@ -164,7 +174,7 @@ proname_refine \
 Here is the complete list of available arguments for `proname_refine`:
 
 | Command | Arguments | Description | Mandatory arguments |
-| ------- | --------- | ----------- | ------------------ |
+| ------- | --------- | ----------- | ------------------- |
 | proname_refine | --clusterid | The percentage of identity at which clustering should be performed. [Option: decimal between 0 and 1] | X |
 |  | --clusterthreads | Number of threads to use for the clustering step. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] |  |
 |  | --inputpath | Path to the folder containing raw fastq files. This must be the same path than the one provided while running proname_import and proname_filter. | X |
@@ -181,6 +191,32 @@ Here is the complete list of available arguments for `proname_refine`:
 ## 4. proname_taxonomy
 
 The files generated at the previous step gathering all the consensus sequences (`rep-seqs.qza`) and associated frequency table (`rep-table.qza`) are used to perform the taxonomic analysis and produce a taxonomy file and a taxa barplot:
+
+~~~
+proname_taxonomy \
+  --qseqs rep_seqs.qza \
+  --qtable rep_table.qza \
+  --db /home/utilisateur/miniconda3/envs/proname/db/rEGEN-B/regenB_sequences.fasta \
+  --reftax /home/utilisateur/miniconda3/envs/proname/db/rEGEN-B/regenB_taxonomy.tsv \
+  --assay assay1
+~~~
+
+Here is the complete list of available arguments for `proname_taxonomy`:
+
+| Command | Arguments | Description | Mandatory arguments |
+| ------- | --------- | ----------- | ------------------- |
+| proname_taxonomy | --qseqs | Path to query sequences. It should be either 'rep_seqs.qza' (if data was imported into QIIME2 at the previous step) or 'rep_seqs.fasta'. | X |
+|  | --qtable | Path to query sequence abundance table. It should be 'rep_table.qza'. This argument is only needed if data was imported into QIIME2 at the previous step. | ~ |
+|  | --db | Path to the name of the reference database used by blastn to carry out the taxonomic analysis. The rEGEN-B (rrn operons Extracted from GENomes of Bacteria) database as well as the Silva138 and Greengenes2 databases are already precompiled in the PRONAME environment and are located in the folder '$HOME/miniconda3/envs/proname/db' (Change "proname" in this path if you named your environment differently). The user can provide the name of another blastn database if desired. Note that the database must be formatted to run with the BLAST Command Line Applications (for more info, see: https://www.ncbi.nlm.nih.gov/books/NBK569841/). | X |
+|  | --reftax | Path to the taxonomic lineages of the sequences included in the reference database. The taxonomy tsv files associated with the rEGEN-B, Silva138 and Greengenes2 databases are already precompiled in the PRONAME environment and are located in the folder '$HOME/miniconda3/envs/proname/db' (Change "proname" in this path if you named your environment differently). The user can provide another reference database and associated taxonomic lineages if desired. | X |
+|  | --evalue | Expectation value (E) threshold to keep hits. [Default: 0.001] |  |
+|  | --percid | Percent identity threshold between query and subject sequences to keep hits. [Default: 80] |  |
+|  | --qcover | Percent query coverage threshold to keep hits. Note that this option does not correspond to the blastn -qcov_hsp_perc option. Here, --qcover reflects the percent coverage of the whole query sequence, so that the results provided are more consistant with those obtained with the online BLASTn tool. [Default: 80] |  |
+|  | --threads | Number of threads to use for the blastn analysis. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] |  |
+|  | --metadata | Path to the metadata file. It should be 'sample_metada.tsv'. This argument is only required if data was imported into QIIME2 at the previous step. | ~ |
+|  | --assay | Name of your metabarcoding assay, that will appear in the name of taxonomy files produced. | X |
+|  | --version | Print the version of the pipeline. |  |
+|  | --help | Print the help menu. |  |
 
 
 

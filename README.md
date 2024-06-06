@@ -149,7 +149,7 @@ The `` file indicates how many high-quality duplex reads remained after filterin
 
 The new scatterplot `LengthvsQualityScatterPlot_HQ_duplex.png` allows visualizing the impact of these filterings on the read quality and length distributions:
 
-
+![HQ_Duplex_scatterplot](./images/LengthvsQualityScatterPlot_HQ_duplex.png?raw=true "HQ_Duplex_scatterplot")
 
 ## 3. proname_refine
 

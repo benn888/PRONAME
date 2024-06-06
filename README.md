@@ -1,6 +1,8 @@
+![PRONAME_logo](./images/Figure2.png?raw=true "PRONAME logo")
+
 # PRONAME: PROcessing NAnopore MEtabarcoding data
 
-![PRONAME_logo](./images/Figure2.png?raw=true "PRONAME workflow")
+PRONAME is an open-source bioinformatics pipeline that allows processing Nanopore metabarcoding sequencing data.
 
 # Installation
 
@@ -20,13 +22,13 @@ You can then run these commands to install and activate the PRONAME environment:
 
 ~~~
 # Creating the environment directory
-mkdir ~/miniconda3/envs/PRONAME
+mkdir ~/miniconda3/envs/proname
 
 # Extracting the environment
-tar -xzf proname.tar.gz -C ~/miniconda3/envs/PRONAME
+tar -xzf proname.tar.gz -C ~/miniconda3/envs/proname
 
 # Activating the environment
-source ~/miniconda3/envs/PRONAME/bin/activate
+source ~/miniconda3/envs/proname/bin/activate
 
 # Removing prefixes
 conda-unpack
@@ -42,3 +44,7 @@ And that's it! You are now ready to analyze your nanopore metabarcoding data wit
 
 These scripts must be run in this order, with their required arguments. 
 The best way to go is to type the name of each script followed by "--help" (e.g. `proname_import --help`) to get the list of all arguments and a usage example.
+
+# Tutorial
+
+

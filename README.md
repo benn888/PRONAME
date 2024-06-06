@@ -1,6 +1,6 @@
 # PRONAME: PROcessing NAnopore MEtabarcoding data
 
-![PRONAME_logo](./images/PRONAME logo.pdf?raw=true "PRONAME workflow")
+![PRONAME_logo](./images/Figure2.png?raw=true "PRONAME workflow")
 
 # Installation
 

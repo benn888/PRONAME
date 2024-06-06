@@ -2,7 +2,8 @@
 
 # PRONAME: PROcessing NAnopore MEtabarcoding data
 
-PRONAME is an open-source bioinformatics pipeline that allows processing Nanopore metabarcoding sequencing data.
+PRONAME is an open-source bioinformatics pipeline that allows processing Nanopore metabarcoding sequencing data. The pipeline is written mainly in bash and is precompiled in a conda environment package which simply needs to be decompressed and activated to be ready to use. The PRONAME package includes all developed scripts, dependencies and precompiled reference databases.
+The pipeline is divided into four steps: (i) Nanopore sequencing data is first imported into PRONAME to trim adapter and primer sequences (optional) and to visualize raw read length and quality (proname_import). (ii) One of the main advantages of the second script of the pipeline (proname_filter) is that it allows diffentiating simplex from duplex reads and, thus, take advantage of higher-accuracy duplex reads introduced with the V14 sequencing chemistry. Reads that do not meet length and quality criteria are then filtered out. (iii) The next script of the pipeline (proname_refine) performs a read clustering, uses Medaka, i.e. a Nanopore data-dedicated tool, to correct sequencing errors by polishing, and discards chimera sequences. (iv) The last script (proname_taxonomy) allows performing the taxonomic analysis of the generated high-accuracy consensus sequences. The pipeline offers the possibility to import the generated files into QIIME2 for further analyses (diversity, abundance, etc.), if desired.
 
 # Installation
 
@@ -17,6 +18,7 @@ rm -rf ~/miniconda3/miniconda.sh
 ~/miniconda3/bin/conda init bash
 ~~~
 
+The PRONAME environment package is available here: FIGSHARE LINK
 
 You can then run these commands to install and activate the PRONAME environment:
 

@@ -131,7 +131,7 @@ Here is the complete list of available arguments for `proname_filter`:
 |  | --version | Print the version of the pipeline. |  |
 |  | --help | Print the help menu. |  |
 
-The `` file indicates how many high-quality duplex reads remained after filtering:
+The `HQ_duplex_read_distribution.tsv` file indicates how many high-quality duplex reads remained after filtering:
 
 | Sample_name | HQ_duplex_reads |
 | ----------- | --------------- |
@@ -155,12 +155,12 @@ The new scatterplot `LengthvsQualityScatterPlot_HQ_duplex.png` allows visualizin
 
 The HQ duplex reads will now undergo a serie of processing steps wrapped in the proname_refine script:
 
-* They are clustered according to a similarity threshold defined by the `` argument;
+* They are clustered according to a similarity threshold defined by the `--clusterid` argument;
 * The centroid sequence is extracted from each cluster;
 * 300 other reads, defined as 'sub-reads', are randomly extracted from each cluster;
 * Each centroid sequence is polished using its associated sub-reads to generate an error-corrected consensus sequence;
 * Chimera sequences are removed;
-* The generated files can then be imported into QIIME2 if desired, by setting the `` argument to 'yes'.
+* The generated files can then be imported into QIIME2 if desired, by setting the `--qiime2import` argument to 'yes'.
 
 ~~~
 proname_refine \
@@ -217,6 +217,113 @@ Here is the complete list of available arguments for `proname_taxonomy`:
 |  | --assay | Name of your metabarcoding assay, that will appear in the name of taxonomy files produced. | X |
 |  | --version | Print the version of the pipeline. |  |
 |  | --help | Print the help menu. |  |
+
+The taxa barplot generated can be used to visualize the results of the taxonomic analysis using [QIIME2 View](https://view.qiime2.org/) for instance:
+
+
+
+This marks the end of the PRONAME pipeline, which allowed generating high-accuracy consensus sequences starting from raw Nanopore metabarcoding data, and performing the subsequent taxonomic analysis.
+
+## 5. After PRONAME
+
+Since we decided to import the generated files into QIIME2, it is easy to carry on with further analyses using this platform. In this tutorial, we will focus on diversity analysis and differential abundance testing.
+
+First of all, we will add information in the metadata file to define to which sample group each sample belongs:
+
+~~~
+awk 'BEGIN {FS=OFS="\t"} \
+  $1 ~ /sample-id/ {$3="treatment"} \
+  $1 ~ /q2:types/ {$3="categorical"} \
+  $1 ~ /sample1|sample2|sample3|sample4|sample5/ {$3="treatment1"} \
+  $1 ~ /sample6|sample7|sample8|sample9|sample10/ {$3="treatment2"} \
+  1' sample-metadata.tsv > sample-metadata.tsv_tmp && mv sample-metadata.tsv_tmp sample-metadata.tsv
+~~~
+
+### 5.1. Diversity analysis
+
+#### 5.1.1. Alpha diversity
+
+We will first compute some alpha diversity metrics:
+
+~~~
+qiime diversity alpha \
+  --i-table rep_table.qza \
+  --p-metric observed_features \
+  --o-alpha-diversity alpha_observed_features.qza
+
+qiime diversity alpha \
+  --i-table rep_table.qza \
+  --p-metric pielou_e \
+  --o-alpha-diversity alpha_pielou_evenness.qza
+
+qiime diversity alpha \
+  --i-table rep_table.qza \
+  --p-metric shannon \
+  --o-alpha-diversity alpha_shannon.qza
+~~~
+Note that it is also possible to carry out alpha rarefaction to select a rarefaction depth before computing diversity metrics, see an example [here](https://docs.qiime2.org/2024.5/tutorials/pd-mice/#alpha-rarefaction-and-selecting-a-rarefaction-depth).
+
+We can now test whether the distribution of sequences is significantly different between both treatment groups:
+
+~~~
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity alpha_observed_features.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --o-visualization alpha_observed_features-group-significance.qzv
+
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity alpha_pielou_evenness.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --o-visualization alpha_pielou_evenness-group-significance.qzv
+
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity alpha_shannon.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --o-visualization alpha_shannon-group-significance.qzv
+~~~
+
+#### 5.1.2. Beta diversity
+
+~~~
+qiime diversity beta \
+  --i-table Taxonomy_table.qza \
+  --p-metric braycurtis \
+  --o-distance-matrix beta_braycurtis.qza
+~~~
+
+~~~
+qiime diversity beta-group-significance \
+  --i-distance-matrix beta_braycurtis.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --m-metadata-column Treatment \
+  --o-visualization beta_braycurtis-treatment-significance.qzv \
+  --p-pairwise
+~~~
+
+### 5.2. Differential abundance
+
+~~~
+qiime taxa collapse \
+  --i-table Taxonomy_table.qza \
+  --i-taxonomy Taxonomy_table_taxonomy.qza \
+  --p-level 6 \
+  --o-collapsed-table Taxonomy_table_l6.qza
+
+qiime composition ancombc \
+  --i-table Taxonomy_table_l6.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --p-formula 'Treatment' \
+  --p-reference-levels 'Treatment::T' \
+  --o-differentials ancombc_treatment_l6.qza
+
+qiime composition da-barplot \
+  --i-data ancombc_treatment_l6.qza \
+  --p-significance-threshold 0.05 \
+  --o-visualization da_barplot_treatment_l6.qzv
+~~~
+
+  
+
 
 
 

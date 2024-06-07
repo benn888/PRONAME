@@ -242,46 +242,69 @@ awk 'BEGIN {FS=OFS="\t"} \
 
 ### 5.1. Diversity analysis
 
+We will generate a tree for phylogenetic diversity analyses:
+
+~~~
+qiime phylogeny align-to-tree-mafft-fasttree \
+  --i-sequences rep_seqs.qza \
+  --o-alignment aligned_rep_seqs.qza \
+  --o-masked-alignment masked_aligned_rep_seqs.qza \
+  --o-tree unrooted_tree.qza \
+  --o-rooted-tree rooted_tree.qza
+~~~
+
+Before computing diversity metrics, we need to choose a rarefaction depth thanks to alpha rarefaction plotting:
+
+~~~
+qiime diversity alpha-rarefaction \
+  --i-table rep_table.qza \
+  --m-metadata-file sample_metadata.tsv \
+  --o-visualization alpha_rarefaction_curves.qzv \
+  --p-min-depth 1 \
+  --p-max-depth 12000
+~~~
+
+Based on the previous figure, we will select 11000 as the rarefaction depth for diversity calculations:
+
+~~~
+qiime diversity core-metrics-phylogenetic \
+  --i-table rep_table.qza \
+  --i-phylogeny rooted_tree.qza \
+  --m-metadata-file sample_metadata.tsv \
+  --p-sampling-depth 11000 \
+  --output-dir core-metrics-results
+~~~
+
 #### 5.1.1. Alpha diversity
 
-We will first compute some alpha diversity metrics:
+Different alpha diversity metrics have been computed at the previous step, including Faith's phylogenetic diversity, the number of observed features and the Shannon index:
 
-~~~
-qiime diversity alpha \
-  --i-table rep_table.qza \
-  --p-metric observed_features \
-  --o-alpha-diversity alpha_observed_features.qza
 
-qiime diversity alpha \
-  --i-table rep_table.qza \
-  --p-metric pielou_e \
-  --o-alpha-diversity alpha_pielou_evenness.qza
-
-qiime diversity alpha \
-  --i-table rep_table.qza \
-  --p-metric shannon \
-  --o-alpha-diversity alpha_shannon.qza
-~~~
-Note that it is also possible to carry out alpha rarefaction to select a rarefaction depth before computing diversity metrics, see an example [here](https://docs.qiime2.org/2024.5/tutorials/pd-mice/#alpha-rarefaction-and-selecting-a-rarefaction-depth).
 
 We can now test whether the distribution of sequences is significantly different between both treatment groups:
 
 ~~~
 qiime diversity alpha-group-significance \
-  --i-alpha-diversity alpha_observed_features.qza \
+  --i-alpha-diversity core-metrics-results/observed_features_vector.qza \
   --m-metadata-file sample_metadata.tsv \
-  --o-visualization alpha_observed_features-group-significance.qzv
+  --o-visualization alpha_observed_features_group_significance.qzv
 
 qiime diversity alpha-group-significance \
-  --i-alpha-diversity alpha_pielou_evenness.qza \
+  --i-alpha-diversity core-metrics-results/faith_pd_vector.qza \
   --m-metadata-file sample_metadata.tsv \
-  --o-visualization alpha_pielou_evenness-group-significance.qzv
+  --o-visualization alpha_faith_pd_group_significance.qzv
 
 qiime diversity alpha-group-significance \
-  --i-alpha-diversity alpha_shannon.qza \
+  --i-alpha-diversity core-metrics-results/shannon_vector.qza \
   --m-metadata-file sample_metadata.tsv \
-  --o-visualization alpha_shannon-group-significance.qzv
+  --o-visualization alpha_shannon_group_significance.qzv
 ~~~
+
+The Kruskal-Wallis tests performed provided the following p-values:
+
+|     | faith_pd | observed_features | shannon |
+| --- | -------- | ----------------- | ------- |
+| p-value | 0.602 | 0.249 | **0.028 ** |
 
 #### 5.1.2. Beta diversity
 

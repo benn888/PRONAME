@@ -264,6 +264,8 @@ qiime diversity alpha-rarefaction \
   --p-max-depth 12000
 ~~~
 
+![alpha_rarefaction](./images/alpha_rarefaction.png?raw=true "alpha_rarefaction")
+
 Based on the previous figure, we will select 11000 as the rarefaction depth for diversity calculations:
 
 ~~~
@@ -279,7 +281,7 @@ qiime diversity core-metrics-phylogenetic \
 
 Different alpha diversity metrics have been computed at the previous step, including Faith's phylogenetic diversity, the number of observed features and the Shannon index:
 
-
+![alpha_diversity](./images/alpha_diversity.png?raw=true "alpha_diversity")
 
 We can now test whether the distribution of sequences is significantly different between both treatment groups:
 
@@ -304,7 +306,7 @@ The Kruskal-Wallis tests performed provided the following p-values:
 
 |     | faith_pd | observed_features | shannon |
 | --- | -------- | ----------------- | ------- |
-| p-value | 0.602 | 0.249 | **0.028 ** |
+| p-value | 0.602 | 0.249 | **0.028** |
 
 #### 5.1.2. Beta diversity
 

@@ -382,7 +382,7 @@ qiime composition da-barplot \
   --o-visualization da_barplot_treatment_l6.qzv
 ~~~
 
-  
+![differential_abundance](./images/differential_abundance.png?raw=true "differential_abundance")
 
 
 

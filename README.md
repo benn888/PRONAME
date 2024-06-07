@@ -310,36 +310,70 @@ The Kruskal-Wallis tests performed provided the following p-values:
 
 #### 5.1.2. Beta diversity
 
-~~~
-qiime diversity beta \
-  --i-table rep_table.qza \
-  --p-metric braycurtis \
-  --o-distance-matrix beta_braycurtis.qza
-~~~
+Different beta diversity metrics were also computed at the above core metric calculation step and visualization files were generated, here is an example with the unweighted UniFrac PCoA results:
+
+![beta_diversity](./images/beta_diversity.png?raw=true "beta_diversity")
+
+We can now analyze the statistical trends for different metrics using PERMANOVA:
 
 ~~~
+# Bray Curtis
 qiime diversity beta-group-significance \
-  --i-distance-matrix beta_braycurtis.qza \
+  --i-distance-matrix core-metrics-results/bray_curtis_distance_matrix.qza \
   --m-metadata-file sample_metadata.tsv \
   --m-metadata-column treatment \
-  --o-visualization beta_braycurtis-treatment-significance.qzv \
-  --p-pairwise
+  --o-visualization beta_braycurtis_treatment_significance.qzv
+
+# Jaccard
+qiime diversity beta-group-significance \
+  --i-distance-matrix core-metrics-results/jaccard_distance_matrix.qza \
+  --m-metadata-file sample_metadata.tsv \
+  --m-metadata-column treatment \
+  --o-visualization beta_jaccard_treatment_significance.qzv
+
+#Weighted UniFrac
+qiime diversity beta-group-significance \
+  --i-distance-matrix core-metrics-results/weighted_unifrac_distance_matrix.qza \
+  --m-metadata-file sample_metadata.tsv \
+  --m-metadata-column treatment \
+  --o-visualization beta_weighted_unifrac_treatment_significance.qzv
+
+# Unweighted UniFrac
+qiime diversity beta-group-significance \
+  --i-distance-matrix core-metrics-results/unweighted_unifrac_distance_matrix.qza \
+  --m-metadata-file sample_metadata.tsv \
+  --m-metadata-column treatment \
+  --o-visualization beta_unweighted_unifrac_treatment_significance.qzv
 ~~~
+
+The PERMANOVA tests performed provided the following p-values:
+
+|     | Bray Curtis | Jaccard | Weighted UniFrac | Unweighted UniFrac |
+| --- | ----------- | ------- | ---------------- | ------------------ |
+| p-value | 0.151 | **0.009** | **0.006** | 0.057 |
 
 ### 5.2. Differential abundance
 
+The last step of this tutorial will test whether individual taxa show a stastistically significant enrichement or depletion in different sample groups. This is done using [ANCOM-BC](https://pubmed.ncbi.nlm.nih.gov/32665548/), that takes into account the sources of biases affecting microbiome data to perform bias correction.
+
+In this example, we will perform the differential abundance test at a the genus taxonomic level. To do so, we need first to collapse the sequences in the `rep_table.qza` at this taxonomic level:
+
 ~~~
 qiime taxa collapse \
-  --i-table Taxonomy_table.qza \
-  --i-taxonomy Taxonomy_table_taxonomy.qza \
+  --i-table rep_table.qza \
+  --i-taxonomy taxonomy_blastn.qza \
   --p-level 6 \
-  --o-collapsed-table Taxonomy_table_l6.qza
+  --o-collapsed-table rep_table_l6.qza
+~~~
 
+We can now  run the ANCOM-BC analysis, taking the treatment1 as the reference group:
+
+~~~
 qiime composition ancombc \
-  --i-table Taxonomy_table_l6.qza \
+  --i-table rep_table_l6.qza \
   --m-metadata-file sample_metadata.tsv \
-  --p-formula 'Treatment' \
-  --p-reference-levels 'Treatment::T' \
+  --p-formula 'treatment' \
+  --p-reference-levels 'treatment::treatment1' \
   --o-differentials ancombc_treatment_l6.qza
 
 qiime composition da-barplot \

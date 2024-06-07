@@ -198,6 +198,7 @@ proname_taxonomy \
   --qtable rep_table.qza \
   --db /home/utilisateur/miniconda3/envs/proname/db/rEGEN-B/regenB_sequences.fasta \
   --reftax /home/utilisateur/miniconda3/envs/proname/db/rEGEN-B/regenB_taxonomy.tsv \
+  --metadata sample_metadata.tsv \
   --assay assay1
 ~~~
 
@@ -207,7 +208,7 @@ Here is the complete list of available arguments for `proname_taxonomy`:
 | ------- | --------- | ----------- | ------------------- |
 | proname_taxonomy | --qseqs | Path to query sequences. It should be either 'rep_seqs.qza' (if data was imported into QIIME2 at the previous step) or 'rep_seqs.fasta'. | X |
 |  | --qtable | Path to query sequence abundance table. It should be 'rep_table.qza'. This argument is only needed if data was imported into QIIME2 at the previous step. | ~ |
-|  | --db | Path to the name of the reference database used by blastn to carry out the taxonomic analysis. The rEGEN-B (rrn operons Extracted from GENomes of Bacteria) database as well as the Silva138 and Greengenes2 databases are already precompiled in the PRONAME environment and are located in the folder '$HOME/miniconda3/envs/proname/db' (Change "proname" in this path if you named your environment differently). The user can provide the name of another blastn database if desired. Note that the database must be formatted to run with the BLAST Command Line Applications (for more info, see: https://www.ncbi.nlm.nih.gov/books/NBK569841/). | X |
+|  | --db | Path to the name of the reference database used by blastn to carry out the taxonomic analysis. The rEGEN-B (rrn operons Extracted from GENomes of Bacteria) database as well as the Silva138 and Greengenes2 databases are already precompiled in the PRONAME environment and are located in the folder '$HOME/miniconda3/envs/proname/db' (Change "proname" in this path if you named your environment differently). The user can provide the name of another blastn database if desired. Note that the database must be formatted to run with the BLAST Command Line Applications (for more info, see [here](https://www.ncbi.nlm.nih.gov/books/NBK569841/)). | X |
 |  | --reftax | Path to the taxonomic lineages of the sequences included in the reference database. The taxonomy tsv files associated with the rEGEN-B, Silva138 and Greengenes2 databases are already precompiled in the PRONAME environment and are located in the folder '$HOME/miniconda3/envs/proname/db' (Change "proname" in this path if you named your environment differently). The user can provide another reference database and associated taxonomic lineages if desired. | X |
 |  | --evalue | Expectation value (E) threshold to keep hits. [Default: 0.001] |  |
 |  | --percid | Percent identity threshold between query and subject sequences to keep hits. [Default: 80] |  |
@@ -228,7 +229,7 @@ This marks the end of the PRONAME pipeline, which allowed generating high-accura
 
 Since we decided to import the generated files into QIIME2, it is easy to carry on with further analyses using this platform. In this tutorial, we will focus on diversity analysis and differential abundance testing.
 
-First of all, we will add information in the metadata file to define to which sample group each sample belongs:
+First of all, we will add information in the metadata file to define to which treatment group each sample belongs:
 
 ~~~
 awk 'BEGIN {FS=OFS="\t"} \
@@ -236,7 +237,7 @@ awk 'BEGIN {FS=OFS="\t"} \
   $1 ~ /q2:types/ {$3="categorical"} \
   $1 ~ /sample1|sample2|sample3|sample4|sample5/ {$3="treatment1"} \
   $1 ~ /sample6|sample7|sample8|sample9|sample10/ {$3="treatment2"} \
-  1' sample-metadata.tsv > sample-metadata.tsv_tmp && mv sample-metadata.tsv_tmp sample-metadata.tsv
+  1' sample_metadata.tsv > sample_metadata.tsv_tmp && mv sample_metadata.tsv_tmp sample_metadata.tsv
 ~~~
 
 ### 5.1. Diversity analysis
@@ -268,17 +269,17 @@ We can now test whether the distribution of sequences is significantly different
 ~~~
 qiime diversity alpha-group-significance \
   --i-alpha-diversity alpha_observed_features.qza \
-  --m-metadata-file sample-metadata.tsv \
+  --m-metadata-file sample_metadata.tsv \
   --o-visualization alpha_observed_features-group-significance.qzv
 
 qiime diversity alpha-group-significance \
   --i-alpha-diversity alpha_pielou_evenness.qza \
-  --m-metadata-file sample-metadata.tsv \
+  --m-metadata-file sample_metadata.tsv \
   --o-visualization alpha_pielou_evenness-group-significance.qzv
 
 qiime diversity alpha-group-significance \
   --i-alpha-diversity alpha_shannon.qza \
-  --m-metadata-file sample-metadata.tsv \
+  --m-metadata-file sample_metadata.tsv \
   --o-visualization alpha_shannon-group-significance.qzv
 ~~~
 
@@ -294,8 +295,8 @@ qiime diversity beta \
 ~~~
 qiime diversity beta-group-significance \
   --i-distance-matrix beta_braycurtis.qza \
-  --m-metadata-file sample-metadata.tsv \
-  --m-metadata-column Treatment \
+  --m-metadata-file sample_metadata.tsv \
+  --m-metadata-column treatment \
   --o-visualization beta_braycurtis-treatment-significance.qzv \
   --p-pairwise
 ~~~
@@ -311,7 +312,7 @@ qiime taxa collapse \
 
 qiime composition ancombc \
   --i-table Taxonomy_table_l6.qza \
-  --m-metadata-file sample-metadata.tsv \
+  --m-metadata-file sample_metadata.tsv \
   --p-formula 'Treatment' \
   --p-reference-levels 'Treatment::T' \
   --o-differentials ancombc_treatment_l6.qza

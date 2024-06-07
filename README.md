@@ -219,9 +219,9 @@ Here is the complete list of available arguments for `proname_taxonomy`:
 |  | --version | Print the version of the pipeline. |  |
 |  | --help | Print the help menu. |  |
 
-The taxa barplot generated can be used to visualize the results of the taxonomic analysis using [QIIME2 View](https://view.qiime2.org/) for instance:
+The taxa barplot generated can be used to visualize the results of the taxonomic analysis using [QIIME2 View](https://view.qiime2.org/) or the [Dokdo API](https://dokdo.readthedocs.io/en/latest/dokdo_api.html) for instance:
 
-
+![taxa_barplot](./images/taxa_barplot_tutorial.png?raw=true "taxa_barplot")
 
 This marks the end of the PRONAME pipeline, which allowed generating high-accuracy consensus sequences starting from raw Nanopore metabarcoding data, and performing the subsequent taxonomic analysis.
 
@@ -287,7 +287,7 @@ qiime diversity alpha-group-significance \
 
 ~~~
 qiime diversity beta \
-  --i-table Taxonomy_table.qza \
+  --i-table rep_table.qza \
   --p-metric braycurtis \
   --o-distance-matrix beta_braycurtis.qza
 ~~~

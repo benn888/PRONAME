@@ -20,7 +20,7 @@ rm -rf ~/miniconda3/miniconda.sh
 ~~~
 NB: You should use the same miniconda path as the one presented above to avoid any issues when running the PRONAME pipeline.
 
-The PRONAME environment package is available here: [FIGSHARE LINK](https://figshare.com/s/6d62e30cbf3e0e8fb082)
+The PRONAME environment package is available here: https://figshare.com/s/6d62e30cbf3e0e8fb082
 
 You can then run these commands to install and activate the PRONAME environment:
 

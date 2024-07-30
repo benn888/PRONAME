@@ -123,6 +123,23 @@ fi
 
 ######################################################
 
+# Listing the sequence identifiers present in each fastq file
+
+if [ ! -d "Rawseqids" ]
+then
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mRecording read distribution in each sample...\033[0m\n"
+
+   mkdir Rawseqids
+
+   for sample in $(ls ${fastq_folder} | awk -F '.fastq' '{print $1}')
+   do
+      awk 'NR == 1 || (NR-1) % 4 == 0' ${fastq_folder}/${sample}.fastq | cut -d "@" -f 2 > Rawseqids/rawseqids_${sample}
+   done
+
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead distribution recorded! \033[0m\n"
+fi
+
+
 # Storing in variables the path of files from proname_filter
 
 ## File from proname_filter with duplex data
@@ -237,7 +254,9 @@ fi
 
 echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCarrying out medaka polishing to generate consensus sequences...\033[0m\n"
 
-# export LD_LIBRARY_PATH=${HOME}/miniconda3/envs/PRONAME/lib/:$LD_LIBRARY_PATH
+## These two lines allow the appropriate setting of library path ##
+proname_env_name=$(ls -lt ${HOME}/miniconda3/envs | grep -i "proname" | head -n 1 | awk -F ' ' '{print $NF}')
+export LD_LIBRARY_PATH=${HOME}/miniconda3/envs/${proname_env_name}/lib/:$LD_LIBRARY_PATH
 
 for i in $(ls vsearch_clusters | grep "split" | cut -d "." -f 1)
 do
@@ -357,7 +376,7 @@ then
      --input-path rep_seqs.fasta \
      --output-path rep_seqs.qza > /dev/null 2>/dev/null
 
-   echo -ne "sample-id\tsample-name\n#q2:types\tcategorical\n$(paste <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}') <(ls RawData | awk -F '.fastq' '{print $1}'))\n" > sample_metadata.tsv
+   echo -ne "sample-id\tsample-name\n#q2:types\tcategorical\n$(paste <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}') <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}'))\n" > sample_metadata.tsv
 
    if [ -e "rep_table.qza" ] && [ -e "rep_seqs.qza" ]
    then

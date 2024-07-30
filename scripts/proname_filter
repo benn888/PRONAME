@@ -122,6 +122,23 @@ then
 fi
 
 
+# Listing the sequence identifiers present in each fastq file
+
+if [ ! -d "Rawseqids" ]
+then
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mRecording read distribution in each sample...\033[0m\n"
+
+   mkdir Rawseqids
+
+   for sample in $(ls ${fastq_folder} | awk -F '.fastq' '{print $1}')
+   do
+      awk 'NR == 1 || (NR-1) % 4 == 0' ${fastq_folder}/${sample}.fastq | cut -d "@" -f 2 > Rawseqids/rawseqids_${sample}
+   done
+
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead distribution recorded! \033[0m\n"
+fi
+
+
 ###############
 # Duplex data #
 ###############

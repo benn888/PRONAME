@@ -1,4 +1,4 @@
-![PRONAME_logo](./images/PRONAME_logo.jpg?raw=true "PRONAME logo")
+![PRONAME_logo](./images/proname_logo.PNG?raw=true "PRONAME logo")
 
 # PRONAME: PROcessing NAnopore MEtabarcoding data
 

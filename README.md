@@ -2,42 +2,45 @@
 
 # PRONAME: PROcessing NAnopore MEtabarcoding data
 
-PRONAME is an open-source bioinformatics pipeline that allows processing Nanopore metabarcoding sequencing data. The pipeline is written mainly in bash and is precompiled in a conda environment package which simply needs to be decompressed and activated to be ready to use. The PRONAME package includes all developed scripts, dependencies and precompiled reference databases.
+PRONAME is an open-source bioinformatics pipeline that allows processing Nanopore metabarcoding sequencing data. The pipeline is written mainly in bash and is compiled in a Docker image which simply needs to be loaded to be ready to use. The Docker image includes all developed scripts, dependencies and precompiled reference databases.
 
-The pipeline is divided into four steps: (i) Nanopore sequencing data is first imported into PRONAME to trim adapter and primer sequences (optional) and to visualize raw read length and quality (`proname_import`). (ii) One of the main advantages of the second script of the pipeline (`proname_filter`) is that it allows diffentiating simplex from duplex reads and, thus, take advantage of higher-accuracy duplex reads introduced with the V14 sequencing chemistry. Reads that do not meet length and quality criteria are then filtered out. (iii) The next script of the pipeline (`proname_refine`) performs a read clustering, uses Medaka, i.e. a Nanopore data-dedicated tool, to correct sequencing errors by polishing, and discards chimera sequences. (iv) The last script (`proname_taxonomy`) allows performing the taxonomic analysis of the generated high-accuracy consensus sequences. The pipeline offers the possibility to import the generated files into QIIME2 for further analyses (diversity, abundance, etc.), if desired.
+The pipeline is divided into four steps: (i) Nanopore sequencing data is first imported into PRONAME to trim adapter and primer sequences (optional) and to visualize raw read length and quality (`proname_import`). (ii) One of the main advantages of the second script of the pipeline (`proname_filter`) is that it allows diffentiating simplex from duplex reads and, thus, take advantage of higher-accuracy duplex reads introduced with the V14 sequencing chemistry. Reads that do not meet length and quality criteria are then filtered out. (iii) The next script of the pipeline (`proname_refine`) performs a read clustering, uses Medaka, i.e. a Nanopore data-dedicated tool, to correct sequencing errors by polishing, and discards chimera sequences. (iv) The last script (`proname_taxonomy`) allows performing the taxonomic analysis of the generated high-accuracy consensus sequences. The pipeline offers the possibility to generate a phyloseq object and to import the generated files into QIIME2 for further analyses (diversity, abundance, etc.), if desired.
 
 # Installation
 
-If you don't have [miniconda3](https://docs.anaconda.com/free/miniconda/) installed, please execute the following commands to install it:
+If you don't have Docker on your computer, you can find instructions to install it [here](https://docs.docker.com/engine/install/).
+
+The PRONAME Docker image is available here: https://figshare.com/s/6d62e30cbf3e0e8fb082 (still needs to be updated)
+This repository includes two Docker images, each optimized for a specific architecture:
+
+* amd64: For x86_64 (Intel/AMD) processors (i.e. suitable for most Linux & Windows machines)
+* arm64: For ARM-based processors (e.g., Apple M1/M2, Raspberry Pi)
+
+These images provide flexibility for users on different hardware platforms.
+
+Once downloaded, you can run the following commands to load the image:
+
+~~~~
+# Loading the image
+docker load -i proname_image_<arch>.tar 
+~~~~
+Where <arch> shoud be replaced with `amd64` or `arm64` according to the architecture. Note that, depending on your installation, running Docker commands may require `sudo` privileges.
+
+Then, the simplest way to run a new container is to use this command:
 
 ~~~
-# Installing miniconda3
-mkdir -p ~/miniconda3
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
-bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
-rm -rf ~/miniconda3/miniconda.sh
-~/miniconda3/bin/conda init bash
-~~~
-NB: You should use the same miniconda path as the one presented above to avoid any issues when running the PRONAME pipeline.
-
-The PRONAME environment package is available here: https://figshare.com/s/6d62e30cbf3e0e8fb082
-
-You can then run these commands to install and activate the PRONAME environment:
-
-~~~
-# Creating the environment directory
-mkdir ~/miniconda3/envs/proname
-
-# Extracting the environment
-tar -xzf proname.tar.gz -C ~/miniconda3/envs/proname
-
-# Activating the environment
-source ~/miniconda3/envs/proname/bin/activate
-
-# Removing prefixes
-conda-unpack
+docker run -it --name proname_container proname_image_<arch>
 ~~~
 
+Alternatively, an effective way to launch a container is to set up a shared volume that mounts a host directory directly in the container. This setup allows access to raw sequencing data in the container and enables direct access to PRONAME results from the host machine:
+
+~~~
+docker run -it --name proname_container -v /path/to/host/data:/data proname_image_<arch>
+~~~
+where `/path/to/host/data` is the path to the directory on your host machine containing the raw sequencing data, and `/data` is the directory in the container where this data will be accessible. Place any files resulting from the PRONAME analysis in /data to access them directly from the host machine.
+
+Note that, although we did not encounter any memory issue when testing and using PRONAME, it is good to keep in mind that [fine-tuning Docker's memory usage](https://docs.docker.com/engine/containers/resource_constraints/) may be useful in certain cases.
+For Docker Desktop on macOS, in particular, ensure that the setting **Settings > General > Use Rosetta for x86_64/amd64 emulation on Apple Silicon** is unchecked.
 
 And that's it! You are now ready to analyze your nanopore metabarcoding data with PRONAME. There are four scripts constituting the pipeline:
 
@@ -81,6 +84,7 @@ Here is the complete list of available arguments for `proname_import`:
 |  | --trimprimers | Indicate whether your sequencing data contain primers that should be trimmed. [Option: "yes" or "no"] | X |
 |  | --fwdprimer | The sequence of the forward primer used during PCR to amplify DNA. If barcoded primers were used to multiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. This argument is required if --trimprimers is set to "yes". | ~ |
 |  | --revprimer | The sequence of the reverse primer used during PCR to amplify DNA. If barcoded primers were used to multiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. This argument is required if --trimprimers is set to "yes". | ~ |
+|  | --noscatterplot | When this argument is set to 'yes', no length vs. quality scatterplot is generated. Since this is a time-consuming step, this possiblity has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip this scatterplot generation. Visual inspection of these plots is crucial for deciding which type of read to work with (duplex and/or simplex) and which length and quality thresholds to apply. [Options: "yes" or "no", Default: "no"] |  |
 |  | --version | Print the version of the pipeline. |  |
 |  | --help | Print the help menu. |  |
 
@@ -99,7 +103,7 @@ The analysis of the `simplex_duplex_read_distribution.tsv` generated file shows 
 | sample8 | 476416 | 101848 |
 | sample9 | 711157 | 55596 |
 
-We can thus work only with duplex reads and discard simplex reads. Analyzing the `LengthvsQualityScatterPlot_duplex.png` file helps determine which length and quality thresholds to choose at the following step:
+We can therefore work only with duplex reads and discard simplex reads. Analyzing the `LengthvsQualityScatterPlot_duplex.png` file (or `LengthvsQualityScatterPlot_duplex.html`) helps determine which length and quality thresholds to apply at the following step:
 
 ![Duplex_scatterplot](./images/LengthvsQualityScatterPlot_duplex.png?raw=true "Duplex_scatterplot")
 
@@ -128,6 +132,7 @@ Here is the complete list of available arguments for `proname_filter`:
 |  | --threads | Number of threads to use. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] |  |
 |  | --inputpath | Path to the folder containing raw fastq files. This must be the same path than the one provided while running proname_import. | X |
 |  | --deletefiles | Delete all non-essential files, i.e. files generated with proname_import that are no more needed for the rest of the analysis through PRONAME. [Option: "yes" or "no", Default: no] |  |
+|  | --noscatterplot | When this argument is set to 'yes', no length vs. quality scatterplot is generated. Since this is a time-consuming step, this possiblity has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip this scatterplot generation. Visual inspection of these plots is crucial for deciding which type of read to work with (duplex and/or simplex) and which length and quality thresholds to apply. [Options: "yes" or "no", Default: "no"] |  |
 |  | --version | Print the version of the pipeline. |  |
 |  | --help | Print the help menu. |  |
 
@@ -147,7 +152,7 @@ The `HQ_duplex_read_distribution.tsv` file indicates how many high-quality duple
 | sample9 | 31843 |
 
 
-The new scatterplot `LengthvsQualityScatterPlot_HQ_duplex.png` allows visualizing the impact of these filterings on the read quality and length distributions:
+The new scatterplot `LengthvsQualityScatterPlot_HQ_duplex.png` (or `LengthvsQualityScatterPlot_HQ_duplex.html`) allows visualizing the impact of these filterings on the read quality and length distributions:
 
 ![HQ_Duplex_scatterplot](./images/LengthvsQualityScatterPlot_HQ_duplex.png?raw=true "HQ_Duplex_scatterplot")
 
@@ -155,11 +160,11 @@ The new scatterplot `LengthvsQualityScatterPlot_HQ_duplex.png` allows visualizin
 
 The HQ duplex reads will now undergo a serie of processing steps wrapped in the proname_refine script:
 
-* They are clustered according to a similarity threshold defined by the `--clusterid` argument;
-* The centroid sequence is extracted from each cluster;
-* 300 other reads, defined as 'sub-reads', are randomly extracted from each cluster;
-* Each centroid sequence is polished using its associated sub-reads to generate an error-corrected consensus sequence;
-* Chimera sequences are removed;
+* They will be clustered according to a similarity threshold defined by the `--clusterid` argument;
+* The centroid sequence will be extracted from each cluster;
+* 300 other reads, defined as 'sub-reads', will be randomly extracted from each cluster;
+* Each centroid sequence will be polished using its associated sub-reads to generate an error-corrected consensus sequence;
+* Chimera sequences will be removed;
 * The generated files can then be imported into QIIME2 if desired, by setting the `--qiime2import` argument to 'yes'.
 
 ~~~
@@ -167,7 +172,7 @@ proname_refine \
   --clusterid 0.90 \
   --inputpath RawData \
   --medakamodel r1041_e82_400bps_sup_v4.2.0 \
-  --chimeradb /home/utilisateur/miniconda3/envs/proname/db/rEGEN-B/regenB_sequences.fasta \
+  --chimeradb /opt/db/rEGEN-B/regenB_sequences.fasta \
   --qiime2import yes
 ~~~
 
@@ -190,14 +195,14 @@ Here is the complete list of available arguments for `proname_refine`:
 
 ## 4. proname_taxonomy
 
-The files generated at the previous step gathering all the consensus sequences (`rep-seqs.qza`) and associated frequency table (`rep-table.qza`) are used to perform the taxonomic analysis and produce a taxonomy file and a taxa barplot:
+The files generated at the previous step gathering all the consensus sequences (`rep-seqs.qza`) and associated frequency table (`rep-table.qza`) are used here to perform the taxonomic analysis and produce a taxonomy file and a taxa barplot:
 
 ~~~
 proname_taxonomy \
   --qseqs rep_seqs.qza \
   --qtable rep_table.qza \
-  --db /home/utilisateur/miniconda3/envs/proname/db/rEGEN-B/regenB_sequences.fasta \
-  --reftax /home/utilisateur/miniconda3/envs/proname/db/rEGEN-B/regenB_taxonomy.tsv \
+  --db /opt/db/rEGEN-B/regenB_sequences.fasta \
+  --reftax /opt/db/rEGEN-B/regenB_taxonomy.tsv \
   --metadata sample_metadata.tsv \
   --assay assay1
 ~~~
@@ -216,6 +221,7 @@ Here is the complete list of available arguments for `proname_taxonomy`:
 |  | --threads | Number of threads to use for the blastn analysis. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] |  |
 |  | --metadata | Path to the metadata file. It should be 'sample_metada.tsv'. This argument is only required if data was imported into QIIME2 at the previous step. | ~ |
 |  | --assay | Name of your metabarcoding assay, that will appear in the name of taxonomy files produced. | X |
+|  | --phyloseq | Specify if a phyloseq object must be generated. [Options: "yes" or "no", Default: "no"] |  |
 |  | --version | Print the version of the pipeline. |  |
 |  | --help | Print the help menu. |  |
 
@@ -227,7 +233,7 @@ This marks the end of the PRONAME pipeline, which allowed generating high-accura
 
 ## 5. After PRONAME
 
-Since we decided to import the generated files into QIIME2, it is easy to carry on with further analyses using this platform. In this tutorial, we will focus on diversity analysis and differential abundance testing.
+Since we decided to import the generated files into QIIME2, it is easy to carry on with further analyses using this platform. In this tutorial, we will focus on diversity analyses and differential abundance testing.
 
 First of all, we will add information in the metadata file to define to which treatment group each sample belongs:
 
@@ -310,7 +316,7 @@ The Kruskal-Wallis tests performed provided the following p-values:
 
 #### 5.1.2. Beta diversity
 
-Different beta diversity metrics were also computed at the above core metric calculation step and visualization files were generated, here is an example with the unweighted UniFrac PCoA results:
+Different beta diversity metrics were also computed at the above core metric calculation step and visualization files were generated. Here is an example with the unweighted UniFrac PCoA results:
 
 ![beta_diversity](./images/beta_diversity.png?raw=true "beta_diversity")
 

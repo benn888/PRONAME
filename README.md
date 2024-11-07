@@ -11,6 +11,7 @@ The pipeline is divided into four steps: (i) Nanopore sequencing data is first i
 If you don't have Docker on your computer, you can find instructions to install it [here](https://docs.docker.com/engine/install/).
 
 The PRONAME Docker image is available here: https://figshare.com/s/6d62e30cbf3e0e8fb082 (still needs to be updated)
+
 This repository includes two Docker images, each optimized for a specific architecture:
 
 * amd64: For x86_64 (Intel/AMD) processors (i.e. suitable for most Linux & Windows machines)
@@ -24,7 +25,7 @@ Once downloaded, you can run the following commands to load the image:
 # Loading the image
 docker load -i proname_image_<arch>.tar 
 ~~~~
-Where <arch> shoud be replaced with `amd64` or `arm64` according to the architecture. Note that, depending on your installation, running Docker commands may require `sudo` privileges.
+Where `<arch>` shoud be replaced with `amd64` or `arm64` according to the architecture. Note that, depending on your installation, running Docker commands may require `sudo` privileges.
 
 Then, the simplest way to run a new container is to use this command:
 
@@ -32,14 +33,15 @@ Then, the simplest way to run a new container is to use this command:
 docker run -it --name proname_container proname_image_<arch>
 ~~~
 
-Alternatively, an effective way to launch a container is to set up a shared volume that mounts a host directory directly in the container. This setup allows access to raw sequencing data in the container and enables direct access to PRONAME results from the host machine:
+However, a more effective way to launch a container is to set up a shared volume that mounts a host directory directly in the container. This setup allows access to raw sequencing data in the container and enables direct access to PRONAME results from the host machine:
 
 ~~~
 docker run -it --name proname_container -v /path/to/host/data:/data proname_image_<arch>
 ~~~
-where `/path/to/host/data` is the path to the directory on your host machine containing the raw sequencing data, and `/data` is the directory in the container where this data will be accessible. Place any files resulting from the PRONAME analysis in /data to access them directly from the host machine.
+where `/path/to/host/data` is the path to the directory on your host machine containing the raw sequencing data, and `/data` is the directory in the container where this data will be accessible. Place any files resulting from the PRONAME analysis in `/data` to access them directly from the host machine.
 
 Note that, although we did not encounter any memory issue when testing and using PRONAME, it is good to keep in mind that [fine-tuning Docker's memory usage](https://docs.docker.com/engine/containers/resource_constraints/) may be useful in certain cases.
+
 For Docker Desktop on macOS, in particular, ensure that the setting **Settings > General > Use Rosetta for x86_64/amd64 emulation on Apple Silicon** is unchecked.
 
 And that's it! You are now ready to analyze your nanopore metabarcoding data with PRONAME. There are four scripts constituting the pipeline:

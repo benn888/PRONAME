@@ -2,7 +2,7 @@
 
 # PRONAME: PROcessing NAnopore MEtabarcoding data
 
-PRONAME is an open-source bioinformatics pipeline that allows processing Nanopore metabarcoding sequencing data. The pipeline is written mainly in bash and is compiled in a Docker image which simply needs to be loaded to be ready to use. The Docker image includes all developed scripts, dependencies and precompiled reference databases.
+PRONAME is an open-source bioinformatics pipeline that allows processing Nanopore metabarcoding sequencing data. The pipeline is written mainly in bash and is compiled in a Docker image which simply needs to be pulled from Docker Hub to be ready to use. The Docker image includes all developed scripts, dependencies and precompiled reference databases.
 
 The pipeline is divided into four steps: (i) Nanopore sequencing data is first imported into PRONAME to trim adapter and primer sequences (optional) and to visualize raw read length and quality (`proname_import`). (ii) One of the main advantages of the second script of the pipeline (`proname_filter`) is that it allows diffentiating simplex from duplex reads and, thus, take advantage of higher-accuracy duplex reads introduced with the V14 sequencing chemistry. Reads that do not meet length and quality criteria are then filtered out. (iii) The next script of the pipeline (`proname_refine`) performs a read clustering, uses Medaka, i.e. a Nanopore data-dedicated tool, to correct sequencing errors by polishing, and discards chimera sequences. (iv) The last script (`proname_taxonomy`) allows performing the taxonomic analysis of the generated high-accuracy consensus sequences. The pipeline offers the possibility to generate a phyloseq object and to import the generated files into QIIME2 for further analyses (diversity, abundance, etc.), if desired.
 
@@ -10,7 +10,7 @@ The pipeline is divided into four steps: (i) Nanopore sequencing data is first i
 
 If you don't have Docker on your computer, you can find instructions to install it [here](https://docs.docker.com/engine/install/).
 
-The PRONAME Docker image is available here: https://figshare.com/s/6d62e30cbf3e0e8fb082 (still needs to be updated)
+The PRONAME Docker image is available on [Docker Hub](https://hub.docker.com/repository/docker/benn888/proname/general).
 
 This repository includes two Docker images, each optimized for a specific architecture:
 
@@ -19,24 +19,35 @@ This repository includes two Docker images, each optimized for a specific archit
 
 These images provide flexibility for users on different hardware platforms.
 
-Once downloaded, you can run the following commands to load the image:
+#### Download
+To download an image, please run one of the following commands:
 
-~~~~
-# Loading the image
-docker load -i proname_image_<arch>.tar 
-~~~~
-Where `<arch>` shoud be replaced with `amd64` or `arm64` according to the architecture. Note that, depending on your installation, running Docker commands may require `sudo` privileges.
+- **Command to pull image for amd64 architecture:**  
+  ```bash
+   docker pull benn888/proname:amd64
+
+- **Command to pull image for arm64 architecture:**  
+  ```bash
+   docker pull benn888/proname:arm64
+Note that, depending on your installation, running Docker commands may require `sudo` privileges.
+
+You can run this command to confirm that the image has successfully been downloaded and is available:
+
+~~~
+docker images
+~~~
 
 Then, the simplest way to run a new container is to use this command:
 
 ~~~
-docker run -it --name proname_container proname_image_<arch>
+docker run -it --name proname_container benn888/proname:<arch>
 ~~~
+Where `<arch>` should be replaced by `amd64` or `arm64`.
 
 However, a more effective way to launch a container is to set up a shared volume that mounts a host directory directly in the container. This setup allows access to raw sequencing data in the container and enables direct access to PRONAME results from the host machine:
 
 ~~~
-docker run -it --name proname_container -v /path/to/host/data:/data proname_image_<arch>
+docker run -it --name proname_container -v /path/to/host/data:/data benn888/proname:<arch>
 ~~~
 where `/path/to/host/data` is the path to the directory on your host machine containing the raw sequencing data, and `/data` is the directory in the container where this data will be accessible. Place any files resulting from the PRONAME analysis in `/data` to access them directly from the host machine.
 
@@ -174,7 +185,7 @@ proname_refine \
   --clusterid 0.90 \
   --inputpath RawData \
   --medakamodel r1041_e82_400bps_sup_v4.2.0 \
-  --chimeradb /opt/db/rEGEN-B/regenB_sequences.fasta \
+  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \
   --qiime2import yes
 ~~~
 
@@ -203,8 +214,8 @@ The files generated at the previous step gathering all the consensus sequences (
 proname_taxonomy \
   --qseqs rep_seqs.qza \
   --qtable rep_table.qza \
-  --db /opt/db/rEGEN-B/regenB_sequences.fasta \
-  --reftax /opt/db/rEGEN-B/regenB_taxonomy.tsv \
+  --db /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \
+  --reftax /opt/db/rEGEN-B/rEGEN-B_taxonomy.tsv \
   --metadata sample_metadata.tsv \
   --assay assay1
 ~~~

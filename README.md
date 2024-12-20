@@ -6,6 +6,10 @@ PRONAME is an open-source bioinformatics pipeline that allows processing Nanopor
 
 The pipeline is divided into four steps: (i) Nanopore sequencing data is first imported into PRONAME to trim adapter and primer sequences (optional) and to visualize raw read length and quality (`proname_import`). (ii) One of the main advantages of the second script of the pipeline (`proname_filter`) is that it allows diffentiating simplex from duplex reads and, thus, take advantage of higher-accuracy duplex reads introduced with the V14 sequencing chemistry. Reads that do not meet length and quality criteria are then filtered out. (iii) The next script of the pipeline (`proname_refine`) performs a read clustering, uses Medaka, i.e. a Nanopore data-dedicated tool, to correct sequencing errors by polishing, and discards chimera sequences. (iv) The last script (`proname_taxonomy`) allows performing the taxonomic analysis of the generated high-accuracy consensus sequences. The pipeline offers the possibility to generate a phyloseq object and to import the generated files into QIIME2 for further analyses (diversity, abundance, etc.), if desired.
 
+The rEGEN-B (rrn operons Extracted from GENomes of Bacteria) database developed in this work is included in the Docker image and is also directly available on [Figshare](https://doi.org/10.6084/m9.figshare.26380702).
+
+Additional information can also be found in our [associated publication](https://www.frontiersin.org/journals/bioinformatics/articles/10.3389/fbinf.2024.1483255/full).
+
 # Installation
 
 If you don't have Docker on your computer, you can find instructions to install it [here](https://docs.docker.com/engine/install/).
@@ -404,5 +408,8 @@ qiime composition da-barplot \
 ![differential_abundance](./images/differential_abundance.png?raw=true "differential_abundance")
 
 
+# Reference
+
+Dubois, B., Delitte, M., Lengrand, S., Bragard, C., Legrève, A., & Debode, F. (2024). PRONAME: a user-friendly pipeline to process long-read Nanopore metabarcoding data by generating high-quality consensus sequences. Frontiers in Bioinformatics, 4, 1483255. doi:  https://doi.org/10.3389/fbinf.2024.1483255
 
 

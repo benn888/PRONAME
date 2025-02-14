@@ -18,18 +18,27 @@ Help()
    echo
    echo "Options:"
    echo -ne "\t--datatype\tIndicate whether you want to work with simplex reads, duplex reads or both. [Option: \"simplex\", \"duplex\" or \"both\"]\n"
+   echo
    echo -ne "\t--filtminlen\tReads with a length below this threshold will be discarded during quality filtering. [Option: integer]\n"
+   echo
    echo -ne "\t--filtmaxlen\tReads with a length above this threshold will be discarded during quality filtering. [Option: integer]\n"
+   echo
    echo -ne "\t--filtminqual\tReads with a quality score below this threshold will be discarded during quality filtering. [Option: integer]\n"
+   echo
    echo -ne "\t--inputpath\tPath to the folder containing raw fastq files. This must be the same path than the one provided while running proname_import.\n"
+   echo
    echo -ne "\t--threads\tNumber of threads to use. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2]\n"
+   echo
    echo -ne "\t--deletefiles\tDelete all non-essential files, i.e. files generated with proname_import that are no more needed for the rest of \n"
    echo -ne "\t\t\tthe analysis through PRONAME. [Option: \"yes\" or \"no\", Default: no] \n"
+   echo
    echo -ne "\t--noscatterplot\tWhen this argument is set to 'yes', no length vs. quality scatterplot is generated. Since this is a time-consuming step, \n"
    echo -ne "\t\t\tthis possiblity has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip \n"
    echo -ne "\t\t\tthis scatterplot generation. Visual inspection of these plots is crucial for deciding which type of read to work with \n"
    echo -ne "\t\t\t(duplex and/or simplex) and which length and quality thresholds to apply. [Options: \"yes\" or \"no\", Default: \"no\"]\n"
+   echo
    echo -ne "\t--version\tPrint the version of the pipeline.\n"
+   echo
    echo -ne "\t--help\t\tPrint this help."
    echo
 
@@ -49,7 +58,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_filter from the PRONAME pipeline, version 1.0.0\n\n"
+    echo -ne "proname_filter from the PRONAME pipeline, version 1.1.0\n\n"
 }
 
 num_threads="2"
@@ -259,7 +268,7 @@ then
    do
      paste \
        <(printf %s ${sample}) \
-       <(grep -c -x -f <(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | cut -d "@" -f 2  | cut -d " " -f 1) Rawseqids/rawseqids_${sample})
+       <(grep -c -x -f <(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | cut -d "@" -f 2  | cut -d " " -f 1) <(cut -d " " -f 1 Rawseqids/rawseqids_${sample}))
    done)\n" > HQ_simplex_read_distribution.tsv
 
    nhqsimplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | wc -l)

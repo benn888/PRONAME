@@ -18,23 +18,32 @@ Help()
    echo
    echo "Options:"
    echo -ne "\t--inputpath\tPath to the folder containing raw fastq files.\n"
+   echo
    echo -ne "\t--threads\tNumber of threads to use for the Guppy adapter-trimming step and/or the Cutadapt primmer-trimming step. \n"
    echo -ne "\t\t\tYou can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2]\n"
+   echo
    echo -ne "\t--duplex\tIndicate whether your sequencing data include duplex reads or not. Duplex reads are high-quality reads \n"
    echo -ne "\t\t\tthat were introduced with the kit 14 chemistry. [Options: \"yes\" or \"no\"]\n"
+   echo
    echo -ne "\t--trimadapters\tIndicate whether your sequencing data contain adapters that should be trimmed. [Options: \"yes\" or \"no\"]\n"
+   echo
    echo -ne "\t--trimprimers\tIndicate whether your sequencing data contain primers that should be trimmed. [Options: \"yes\" or \"no\"]\n"
+   echo
    echo -ne "\t--fwdprimer\tThe sequence of the forward primer used during PCR to amplify DNA. If barcoded primers were used to \n"
    echo -ne "\t\t\tmultiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. \n"
    echo -ne "\t\t\tThis argument is required if --trimprimers is set to \"yes\".\n"
+   echo
    echo -ne "\t--revprimer\tThe sequence of the reverse primer used during PCR to amplify DNA. If barcoded primers were used to \n"
    echo -ne "\t\t\tmultiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. \n"
    echo -ne "\t\t\tThis argument is required if --trimprimers is set to \"yes\".\n"
+   echo
    echo -ne "\t--noscatterplot\tWhen this argument is set to 'yes', no length vs. quality scatterplot is generated. Since this is a time-consuming step, \n"
    echo -ne "\t\t\tthis possiblity has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip \n"
    echo -ne "\t\t\tthis scatterplot generation. Visual inspection of these plots is crucial for deciding which type of read to work with \n"
    echo -ne "\t\t\t(duplex and/or simplex) and which length and quality thresholds to apply. [Options: \"yes\" or \"no\", Default: \"no\"]\n"
+   echo
    echo -ne "\t--version\tPrint the version of the pipeline.\n"
+   echo
    echo -ne "\t--help\t\tPrint this help."
    echo
 
@@ -55,7 +64,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_import from the PRONAME pipeline, version 1.0.0\n\n"
+    echo -ne "proname_import from the PRONAME pipeline, version 1.1.0\n\n"
 }
 
 num_threads="2"

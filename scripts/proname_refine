@@ -18,24 +18,36 @@ Help()
    echo
    echo "Options:"
    echo -ne "\t--clusterid\t\tThe percentage of identity at which clustering should be performed. [Option: decimal between 0 and 1]\n"
+   echo
    echo -ne "\t--clusterthreads\tNumber of threads to use for the clustering step. You can know the number of available threads on your computer \n"
    echo -ne "\t\t\t\tby running the command 'nproc --all' [Default: 2]\n"
+   echo
    echo -ne "\t--inputpath\t\tPath to the folder containing raw fastq files. This must be the same path than the one provided while \n"
    echo -ne "\t\t\t\trunning proname_import and proname_filter.\n"
+   echo
    echo -ne "\t--subsampledreads\tNumber of subsampled reads that will be aligned against the centroid sequence during polishing. [Default: 300]\n"
-   echo -ne "\t--medakabatchsize\tControls memory use. Medaka developers set the default value to 100 but it was reduced to 20 in PRONAME because \n"
-   echo -ne "\t\t\t\tit is one of the main reasons why medaka may crash due to insufficient available memory. Feel free to increase \n"
-   echo -ne "\t\t\t\tthis value if your working machine has enough memory. [Default: 20]\n"
-   echo -ne "\t--medakathreads\t\tNumber of threads to use for the polishing step. The default value has been set to 1 because the lack of memory \n"
-   echo -ne "\t\t\t\tis one of the main reasons why medaka may crash. Feel free to increase this value if your working machine has enough memory. \n"
-   echo -ne "\t\t\t\tYou can know the number of available threads on your computer by running the command 'nproc --all' [Default: 1]\n"
+   echo
+   echo -ne "\t--medakabatchsize\tControls memory use. The default value has been set to 100. If Medaka shows out of memory errors, \n"
+   echo -ne "\t\t\t\tthe batch size should be reduced. [Default: 100]\n"
+   echo
+   echo -ne "\t--medakathreads\t\tNumber of threads to use for the polishing step. This option determines the number of CPU threads \n"
+   echo -ne "\t\t\t\tused for data loading and preprocessing, but not for consensus generation itself. Increasing this value beyond 2 \n"
+   echo -ne "\t\t\t\tdoes not significantly improve performance because Medaka automatically uses additional threads for background \n"
+   echo -ne "\t\t\t\tprocessing. If running Medaka on a CPU, setting --medakathreads to 2 is recommended. If running on a GPU, this \n"
+   echo -ne "\t\t\t\tsetting has little impact, as the main computation is handled by PyTorch and CUDA. [Default: 2]\n"
+   echo
    echo -ne "\t--medakamodel\t\tBasecalling model used to generate raw fastq files. This model will be used by medaka to polish data.\n"
    echo -ne "\t\t\t\tThe list of available models can be found by running 'medaka tools list\_models'\n"
+   echo
    echo -ne "\t--chimeradb\t\tPath to the reference database to use for the chimera detection.\n"
+   echo
    echo -ne "\t--qiime2import\t\tIndicate whether the generated representative sequences and table must be imported into QIIME2. [Option: \"yes\" or \"no\"]\n"
+   echo
    echo -ne "\t--deletefiles\t\tDelete all non-essential files, i.e. files generated with proname_filter that are no more needed for the rest of \n"
    echo -ne "\t\t\t\tthe analysis through PRONAME. [Option: \"yes\" or \"no\", Default: no] \n"
+   echo
    echo -ne "\t--version\t\tPrint the version of the pipeline.\n"
+   echo
    echo -ne "\t--help\t\t\tPrint this help."
    echo
 
@@ -47,7 +59,7 @@ Help()
    echo "proname_refine \\"
    echo "  --clusterid 0.90 \\"
    echo "  --inputpath RawData \\"
-   echo "  --medakamodel r1041_e82_400bps_sup_v4.2.0 \\"
+   echo "  --medakamodel r1041_e82_400bps_sup_v5.0.0 \\"
    echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
    echo "  --qiime2import yes"
    echo
@@ -55,13 +67,13 @@ Help()
 
 Version()
 {
-    echo -ne "proname_refine from the PRONAME pipeline, version 1.0.0\n\n"
+    echo -ne "proname_refine from the PRONAME pipeline, version 1.1.0\n\n"
 }
 
 clustering_threads="2"
 n_subsampled_reads="300"
-medaka_batchsize="20"
-medaka_threads="1"
+medaka_batchsize="100"
+medaka_threads="2"
 delete_non_essential="no"
 
 # Transform long options to short ones
@@ -162,8 +174,8 @@ fi
 
 # Removing items from a potential previous failed run
 
-rm -r vsearch_clusters
-rm cluster*_seq_count
+rm -rf vsearch_clusters
+rm -f cluster*_seq_count
 
 # Clustering reads into OTUs
 
@@ -194,7 +206,7 @@ do
    done > ${cluster}_seq_count
 done
 
-if ls vsearch_clusters/cluster* 1> /dev/null 2>&1
+if find vsearch_clusters -name 'cluster*' | grep -q . 1> /dev/null 2>&1
 then
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead clustering completed! \033[0m\n"
 else
@@ -209,7 +221,7 @@ echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mSplitting clusters 
 
 for i in vsearch_clusters/*;do seqkit split -p 2 $i;done
 
-if ls vsearch_clusters/*split* 1> /dev/null 2>&1
+if find vsearch_clusters -name '*split*' | grep -q . 1> /dev/null 2>&1
 then
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mSplitting completed! \033[0m\n"
 else
@@ -227,7 +239,7 @@ do
    seqkit range -r -1:-1 vsearch_clusters/${i}.split/${i}.part_001 -w 0 -o vsearch_clusters/centroid_${i}.fasta
 done
 
-if ls vsearch_clusters/centroid* 1> /dev/null 2>&1
+if find vsearch_clusters -name 'centroid*' | grep -q . 1> /dev/null 2>&1
 then
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mExtraction completed! \033[0m\n"
 else
@@ -245,7 +257,7 @@ do
    seqkit shuffle -s 23 vsearch_clusters/$i 2>/dev/null | seqkit head -n ${n_subsampled_reads} -w 0 -o vsearch_clusters/subreads_${i}.fasta
 done
 
-if ls vsearch_clusters/subreads* 1> /dev/null 2>&1
+if find vsearch_clusters -name 'subreads*' | grep -q . 1> /dev/null 2>&1
 then
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mSubsampling completed! \033[0m\n"
 else
@@ -260,10 +272,16 @@ echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCarrying out medaka
 
 for i in $(ls vsearch_clusters | grep "split" | cut -d "." -f 1)
 do
-   medaka_consensus -d vsearch_clusters/centroid_${i}.fasta -i vsearch_clusters/subreads_${i}.fasta -b ${medaka_batchsize} -t ${medaka_threads} -m ${medaka_model} -o vsearch_clusters/medaka_${i}
+   medaka_consensus \
+      -d vsearch_clusters/centroid_${i}.fasta \
+      -i vsearch_clusters/subreads_${i}.fasta \
+      -b ${medaka_batchsize} \
+      -t ${medaka_threads} \
+      -m ${medaka_model} \
+      -o vsearch_clusters/medaka_${i}
 done
 
-if ls vsearch_clusters/medaka* 1> /dev/null 2>&1
+if find vsearch_clusters -name 'medaka*' | grep -q . 1> /dev/null 2>&1
 then
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mPolishing completed! \033[0m\n"
 else
@@ -435,3 +453,4 @@ unset medaka_model
 unset chimera_db
 unset qiime2_import
 unset delete_non_essential
+

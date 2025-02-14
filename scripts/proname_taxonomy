@@ -19,29 +19,41 @@ Help()
    echo "Options:"
    echo -ne "\t--qseqs\t\tPath to query sequences. It should be either 'rep_seqs.qza' (if data was imported into QIIME2 at the \n"
    echo -ne "\t\t\tprevious step) or 'rep_seqs.fasta'.\n"
+   echo
    echo -ne "\t--qtable\tPath to query sequence abundance table. It should be 'rep_table.qza'. This argument is only needed if \n"
    echo -ne "\t\t\tdata was imported into QIIME2 at the previous step.\n"
+   echo
    echo -ne "\t--db\t\tPath to the name of the reference database used by blastn to carry out the taxonomic analysis. \n"
    echo -ne "\t\t\tThe rEGEN-B (rrn operons Extracted from GENomes of Bacteria) database as well as the GROND, Silva138 and Greengenes2 databases \n"
    echo -ne "\t\t\tare also available in the PRONAME docker and are located in the folder '/opt/db'. \n"
    echo -ne "\t\t\tThe user can provide the name of another blastn database if desired. Note that the database must be formatted \n"
    echo -ne "\t\t\tto run with the BLAST Command Line Applications (for more info, see: https://www.ncbi.nlm.nih.gov/books/NBK569841/).\n"
+   echo
    echo -ne "\t--reftax\tPath to the taxonomic lineages of the sequences included in the reference database. \n"
    echo -ne "\t\t\tThe taxonomy tsv files associated with the rEGEN-B, GROND, Silva138 and Greengenes2 databases \n"
    echo -ne "\t\t\tare available in the PRONAME docker and are located in the folder '/opt/db'.\n"
    echo -ne "\t\t\tThe user can provide another reference database and associated taxonomic lineages if desired.\n"
+   echo
    echo -ne "\t--evalue\tExpectation value (E) threshold to keep hits. [Default: 0.001]\n"
+   echo
    echo -ne "\t--percid\tPercent identity threshold between query and subject sequences to keep hits. [Default: 80]\n"
+   echo
    echo -ne "\t--qcover\tPercent query coverage threshold to keep hits. Note that this option does not correspond to the \n"
    echo -ne "\t\t\tblastn -qcov_hsp_perc option. Here, --qcover reflects the percent coverage of the whole query sequence, \n"
    echo -ne "\t\t\tso that the results provided are more consistant with those obtained with the online BLASTn tool. [Default: 80]\n"
+   echo
    echo -ne "\t--threads\tNumber of threads to use for the blastn analysis. You can know the number of available threads on your \n"
    echo -ne "\t\t\tcomputer by running the command 'nproc --all' [Default: 2]\n"
+   echo
    echo -ne "\t--metadata\tPath to the metadata file. It should be 'sample_metada.tsv'. This argument is only required if data was \n"
    echo -ne "\t\t\timported into QIIME2 at the previous step.\n"
+   echo
    echo -ne "\t--assay\t\tName of your metabarcoding assay, that will appear in the name of taxonomy files produced.\n"
+   echo
    echo -ne "\t--phyloseq\tSpecify if a phyloseq object must be generated. [Options: \"yes\" or \"no\", Default: \"no\"]\n"
+   echo
    echo -ne "\t--version\tPrint the version of the pipeline.\n"
+   echo
    echo -ne "\t--help\t\tPrint this help."
    echo
 
@@ -63,7 +75,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_taxonomy from the PRONAME pipeline, version 1.0.0\n\n"
+    echo -ne "proname_taxonomy from the PRONAME pipeline, version 1.1.0\n\n"
 }
 
 evalue="0.001"

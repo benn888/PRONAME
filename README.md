@@ -28,11 +28,11 @@ To download an image, please run one of the following commands:
 
 - **Command to pull image for amd64 architecture:**  
   ```bash
-   docker pull benn888/proname:amd64
+   docker pull benn888/proname:v1.1.0-amd64
 
 - **Command to pull image for arm64 architecture:**  
   ```bash
-   docker pull benn888/proname:arm64
+   docker pull benn888/proname:v1.1.0-arm64
 Note that, depending on your installation, running Docker commands may require `sudo` privileges.
 
 You can run this command to confirm that the image has successfully been downloaded and is available:
@@ -44,16 +44,23 @@ docker images
 Then, the simplest way to run a new container is to use this command:
 
 ~~~
-docker run -it --name proname_container benn888/proname:<arch>
+docker run -it --name proname_container benn888/proname:v1.1.0-<arch>
 ~~~
 Where `<arch>` should be replaced by `amd64` or `arm64`.
 
 However, a more effective way to launch a container is to set up a shared volume that mounts a host directory directly in the container. This setup allows access to raw sequencing data in the container and enables direct access to PRONAME results from the host machine:
 
 ~~~
-docker run -it --name proname_container -v /path/to/host/data:/data benn888/proname:<arch>
+docker run -it --name proname_container -v /path/to/host/data:/data benn888/proname:v1.1.0-<arch>
 ~~~
 where `/path/to/host/data` is the path to the directory on your host machine containing the raw sequencing data, and `/data` is the directory in the container where this data will be accessible. Place any files resulting from the PRONAME analysis in `/data` to access them directly from the host machine.
+
+If you want to make the GPU accessible to the Docker container for Medaka polishing, you can add the `--gpus` argument: 
+
+~~~
+docker run -it --gpus all --name proname_container -v /path/to/host/data:/data benn888/proname:v1.1.0-<arch>
+~~~
+If you have multiple GPUs available, you can specify which one should be accessible to the container using `--gpus "device=0"`, where `0` is the GPU identifier reported by the `nvidia-smi` command.
 
 Note that, although we did not encounter any memory issue when testing and using PRONAME, it is good to keep in mind that [fine-tuning Docker's memory usage](https://docs.docker.com/engine/containers/resource_constraints/) may be useful in certain cases.
 
@@ -68,6 +75,24 @@ And that's it! You are now ready to analyze your nanopore metabarcoding data wit
 
 These scripts must be run in this order, with their required arguments. 
 The best way to go is to type the name of each script followed by "--help" (e.g. `proname_import --help`) to get the list of all arguments and a usage example. A tutorial detailing the whole workflow is also presented below.
+
+# rEGEN-B database
+
+The recently developed rEGEN-B (rrn operons Extracted from GENomes of Bacteria) database is included in PRONAME, please refer to the [associated publication](https://www.frontiersin.org/journals/bioinformatics/articles/10.3389/fbinf.2024.1483255/full) for details.
+
+With the v1.1.0 release of the pipeline, the rEGEN-B database has been updated to include the following improvements:
+
+* **Update**: integration of rrn sequences from bacterial genomes published between November 4, 2024, and January 15, 2025
+* **Removal of incomplete taxonomic lineages**: Sequences lacking a complete taxonomic classification down to the species level have been removed (e.g., `k__; p__Acidobacteria; c__Vicinamibacteria; o__Vicinamamibacterales; f__; g__; s__Vicinamibacterales bacterium`).
+* **Standardization**: Taxonomic lineage nomenclature at the kingdom level has been standardized.
+
+The main characteristics of the updated databases are summarized below:
+
+| Database | Average sequence length (bp) | Number of sequences | Number of species |
+| -------- | ---------------------------- | ------------------- | ----------------- |
+| rEGEN-B | 4580 | 542,371 | 15,903 |
+| rEGEN-B_uniq | 4614 | 115,727 | 15,903 |
+
 
 # Tutorial
 

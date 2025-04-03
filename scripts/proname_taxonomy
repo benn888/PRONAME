@@ -75,7 +75,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_taxonomy from the PRONAME pipeline, version 1.1.0\n\n"
+    echo -ne "proname_taxonomy from the PRONAME pipeline, version 2.0.0\n\n"
 }
 
 evalue="0.001"
@@ -159,9 +159,21 @@ then
 
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCarrying out the taxonomic analysis...\033[0m\n"
 
-   qiime tools export \
-     --input-path ${query_seqs} \
-     --output-path . >/dev/null 2>/dev/null
+   ARCH=$(uname -m)
+
+   if [[ "$ARCH" == "x86_64" ]]
+   then
+      qiime tools export \
+        --input-path ${query_seqs} \
+        --output-path . >/dev/null 2>/dev/null
+   elif [[ "$ARCH" == "aarch64" ]]
+   then
+      echo -ne "\033[1;33mARM64 users: Be aware that, for practical reasons, 'rep_seqs.fasta' is used for the taxonomic analysis, even if you supplied 'rep_seqs.qza' via the --qseqs argument.\033[0m \n"
+      cp rep_seqs.fasta dna-sequences.fasta
+   else
+      echo -ne "\n\033[31m\033[1mError: Unknown system architecture '$ARCH'. Unable to decide QIIME2 strategy.\033[0m\n"
+      exit 1
+   fi
 
    blastn \
      -query dna-sequences.fasta \
@@ -195,45 +207,17 @@ then
    cat taxonomy_blastn.tsv Unassigned_seqids | awk 'BEGIN {FS=OFS="\t"} {if ($2=="") $2="Unassigned"; print}' > taxonomy_blastn.tsv_tmp
    mv taxonomy_blastn.tsv_tmp taxonomy_${assay_name}_blastn.tsv
    rm taxonomy_blastn.tsv
+   rm Unassigned_seqids
+   rm dna-sequences.fasta
+   rm -r Rawseqids >/dev/null 2>/dev/null
+   rm blastn_outfile.tsv
 
    
    if [ -e "taxonomy_${assay_name}_blastn.tsv" ]
    then
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mTaxonomic analysis completed! \033[0m\n"
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mImporting taxonomy file into QIIME2...\033[0m\n"
    else
       echo -ne "\n\033[31m\033[1mError: taxonomic analysis failed. \033[0m\n\n"
-      echo -ne "Please consult the help menu.\n"
-      exit;
-   fi
-
-   qiime tools import \
-     --type 'FeatureData[Taxonomy]' \
-     --input-format HeaderlessTSVTaxonomyFormat \
-     --input-path taxonomy_${assay_name}_blastn.tsv \
-     --output-path taxonomy_blastn.qza >/dev/null 2>/dev/null
-
-   if [ -e "taxonomy_blastn.qza" ]
-   then
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mThe taxonomy file was successfully imported into QIIME2! \033[0m\n"
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCreating a taxa barplot...\033[0m\n"
-   else
-      echo -ne "\n\033[31m\033[1mError: importing taxonomy file into QIIME2 failed. \033[0m\n\n"
-      echo -ne "Please consult the help menu.\n"
-      exit;
-   fi
-
-   qiime taxa barplot \
-     --i-table ${query_table} \
-     --i-taxonomy taxonomy_blastn.qza \
-     --m-metadata-file ${metadata} \
-     --o-visualization taxa_barplot_${assay_name}_blastn.qzv >/dev/null 2>/dev/null
-
-   if [ -e "taxa_barplot_${assay_name}_blastn.qzv" ]
-   then
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mTaxa barplot created! \033[0m\n"
-   else
-      echo -ne "\n\033[31m\033[1mError: the taxa barplot creation failed. \033[0m\n\n"
       echo -ne "Please consult the help menu.\n"
       exit;
    fi
@@ -256,23 +240,94 @@ then
       if [ -e "phyloseq_object.rds" ]
       then
          echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mPhyloseq object created successfully! \033[0m\n"
-         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : You can now inspect the taxa barplot (\e[34mtaxa_barplot_${assay_name}_blastn.qzv\e[0m) on \033[4mhttps://view.qiime2.org/\033[0m.\n"
-         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : You can also use the generated taxonomy file (\e[34mtaxonomy_blastn.qza\e[0m), the representative sequences (\e[34mrep_seqs.qza\e[0m) and their frequency in each sample (\e[34mrep_table.qza\e[0m) for further processing with QIIME2 like alpha-/beta-diversity analysis or differential abundance testing, among others. If you plan to perform some analyses using R, you can use the phyloseq object that was generated (\e[34mphyloseq_object.rds\e[0m).\n"
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : You can use the generated object (\e[34mphyloseq_object.rds\e[0m) to perform further analyses using R.\n"
       else
          echo -ne "\n\033[31m\033[1mError: Phyloseq object creation failed. \033[0m\n\n"
          echo -ne "Please consult the help menu.\n"
          exit;
       fi
-   else
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : You can now inspect the taxa barplot (\e[34mtaxa_barplot_${assay_name}_blastn.qzv\e[0m) on \033[4mhttps://view.qiime2.org/\033[0m.\n"
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : You can also use the generated taxonomy file (\e[34mtaxonomy_blastn.qza\e[0m) together with the representative sequences (\e[34mrep_seqs.qza\e[0m) and their frequency in each sample (\e[34mrep_table.qza\e[0m) for further processing with QIIME2 like alpha-/beta-diversity analysis or differential abundance testing, among others.\n"
    fi
 
-   rm Unassigned_seqids
-   rm dna-sequences.fasta
-   rm -r Rawseqids >/dev/null 2>/dev/null
-   rm blastn_outfile.tsv
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mImporting taxonomy files into QIIME2...\033[0m\n"
 
+   if [[ "$ARCH" == "x86_64" ]]
+   then
+      qiime tools import \
+        --type 'FeatureData[Taxonomy]' \
+        --input-format HeaderlessTSVTaxonomyFormat \
+        --input-path taxonomy_${assay_name}_blastn.tsv \
+        --output-path taxonomy_blastn.qza >/dev/null 2>/dev/null
+
+      if [ -e "taxonomy_blastn.qza" ]
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mThe taxonomy file was successfully imported into QIIME2! \033[0m\n"
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCreating a taxa barplot...\033[0m\n"
+      else
+         echo -ne "\n\033[31m\033[1mError: importing taxonomy file into QIIME2 failed. \033[0m\n\n"
+         echo -ne "Please consult the help menu.\n"
+         exit;
+      fi
+
+      qiime taxa barplot \
+        --i-table ${query_table} \
+        --i-taxonomy taxonomy_blastn.qza \
+        --m-metadata-file ${metadata} \
+        --o-visualization taxa_barplot_${assay_name}_blastn.qzv >/dev/null 2>/dev/null
+
+      if [ -e "taxa_barplot_${assay_name}_blastn.qzv" ]
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mTaxa barplot created! \033[0m\n"
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : You can now inspect the taxa barplot (\e[34mtaxa_barplot_${assay_name}_blastn.qzv\e[0m) on \033[4mhttps://view.qiime2.org/\033[0m.\n"
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : You can also use the generated taxonomy file (\e[34mtaxonomy_blastn.qza\e[0m), the representative sequences (\e[34mrep_seqs.qza\e[0m) and their frequency in each sample (\e[34mrep_table.qza\e[0m) for further processing with QIIME2 like alpha-/beta-diversity analysis or differential abundance testing, among others.\n"
+      else
+         echo -ne "\n\033[31m\033[1mError: the taxa barplot creation failed. \033[0m\n\n"
+         echo -ne "Please consult the help menu.\n"
+         exit;
+      fi
+
+   elif [[ "$ARCH" == "aarch64" ]]
+   then
+      echo -ne "\n\033[1;33m!!! NOTE FOR ARM64 USERS !!!\033[0m\n"
+      echo -ne "The current Docker image runs on ARM64 architecture, and QIIME2 is not natively supported on ARM64.\n\n"
+      echo -ne "\e[4mYou have two options\e[0m:\n\n"
+      echo -ne "(i) If QIIME2 is installed on your host machine, run the following commands manually on it:\n\n"
+      echo -ne "\033[1m# Defining variables: Re-enter here the values you provided for the --qtable, --metadata and --assay arguments when running proname_taxonomy\033[0m\n"
+      echo -ne "query_table=\"rep_table.qza\" \n"
+      echo -ne "metadata=\"sample_metadata.tsv\" \n"
+      echo -ne "assay_name=\"assay1\" \n"
+      echo
+      echo -ne "\033[1m# Importing taxonomy into QIIME2\033[0m\n"
+      echo -ne "qiime tools import --input-path taxonomy_\${assay_name}_blastn.tsv --type 'FeatureData[Taxonomy]' --input-format HeaderlessTSVTaxonomyFormat --output-path taxonomy_blastn.qza\n\n"
+      echo -ne "\033[1m# Creating taxa barplot in QIIME2\033[0m\n"
+      echo -ne "qiime taxa barplot --i-table \${query_table} --i-taxonomy taxonomy_blastn.qza --m-metadata-file \${metadata} --o-visualization taxa_barplot_\${assay_name}_blastn.qzv\n\n"
+      echo
+      echo -ne "(ii) If QIIME2 is not installed on your host machine, run the following commands manually on it:\n\n"
+      echo -ne "\033[1m# Defining variables: Re-enter here the values you provided for the --qtable, --metadata and --assay arguments when running proname_taxonomy\033[0m\n"
+      echo -ne "query_table=\"rep_table.qza\" \n"
+      echo -ne "metadata=\"sample_metadata.tsv\" \n"
+      echo -ne "assay_name=\"assay1\" \n"
+      echo
+      echo -ne "\033[1m# Importing taxonomy into QIIME2\033[0m\n"
+      echo -ne "docker run --rm -v /path/to/host/data:/data quay.io/qiime2/core:2024.5 qiime tools import \\ \n"
+      echo -ne "  --input-path taxonomy_\${assay_name}_blastn.tsv \\ \n"
+      echo -ne "  --type 'FeatureData[Taxonomy]' \\ \n"
+      echo -ne "  --input-format HeaderlessTSVTaxonomyFormat \\ \n"
+      echo -ne "  --output-path taxonomy_blastn.qza \n"
+      echo
+      echo -ne "\033[1m# Creating taxa barplot in QIIME2\033[0m\n"
+      echo -ne "docker run --rm -v /path/to/host/data:/data quay.io/qiime2/core:2024.5 qiime taxa barplot \\ \n"
+      echo -ne "  --i-table \${query_table} \\ \n"
+      echo -ne "  --i-taxonomy taxonomy_blastn.qza \\ \n"
+      echo -ne "  --m-metadata-file \${metadata} \\ \n"
+      echo -ne "  --o-visualization taxa_barplot_\${assay_name}_blastn.qzv \n\n"
+
+      echo -ne "\033[1;33mOnce these files are ready, you will be able to inspect the taxa barplot (\033[34mtaxa_barplot_\${assay_name}_blastn.qzv\033[1;33m) on \033[4;1;33mhttps://view.qiime2.org/\033[1;33m).\033[0m\n"
+      echo -ne "\033[1;33mYou will also be able to use the generated taxonomy file (\033[34mtaxonomy_blastn.qza\033[1;33m), the representative sequences (\033[34mrep_seqs.qza\033[1;33m) and their frequency in each sample (\033[34mrep_table.qza\033[1;33m) for further processing with QIIME2 like alpha-/beta-diversity analysis or differential abundance testing, among others.\033[0m\n"
+
+   else
+      echo -ne "\n\033[31m\033[1mError: Unknown system architecture '$ARCH'. Unable to decide QIIME2 strategy.\033[0m\n"
+      exit 1
+   fi
 
 else
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCarrying out the taxonomic analysis...\033[0m\n"
@@ -360,5 +415,6 @@ unset num_threads
 unset metadata
 unset assay_name
 unset generate_phyloseq
+unset ARCH
 
 

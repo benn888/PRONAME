@@ -14,7 +14,7 @@ Help()
 ## Display Help
    echo -ne "\nThe proname_filter script is the second part of the PRONAME pipeline and allows quality-filtering Nanopore metabarcoding data coming from proname_import. \nIt also includes the counting of high-quality simplex reads and/or duplex reads (if applicable), and the creation of Length vs Quality scatter plots."
    echo
-   echo -ne "\nSyntax: proname_filter [--datatype|--filtminlen|--filtmaxlen|--filtminqual|--inputpath|--threads|--deletefiles|--noscatterplot|--version|--help]"
+   echo -ne "\nSyntax: proname_filter [--datatype|--filtminlen|--filtmaxlen|--filtminqual|--inputpath|--threads|--deletefiles|--nocounting|--plotformat|--noscatterplot|--version|--help]"
    echo
    echo "Options:"
    echo -ne "\t--datatype\tIndicate whether you want to work with simplex reads, duplex reads or both. [Option: \"simplex\", \"duplex\" or \"both\"]\n"
@@ -31,6 +31,13 @@ Help()
    echo
    echo -ne "\t--deletefiles\tDelete all non-essential files, i.e. files generated with proname_import that are no more needed for the rest of \n"
    echo -ne "\t\t\tthe analysis through PRONAME. [Option: \"yes\" or \"no\", Default: no] \n"
+   echo
+   echo -ne "\t--nocounting\tWhen this argument is set to \"yes\", counting of HQ simplex/duplex reads is not performed. \n"
+   echo -ne "\t\t\t[Options: \"yes\" or \"no\", Default: \"no\"]\n"
+   echo
+   echo -ne "\t--plotformat\tFormat of the scatterplot visualization file produced. It can be either \"png\" or \"html\".  \n"
+   echo -ne "\t\t\tSince NanoPlot produces an empty png plot for an unknown reason, it is only used to generate html visualizations. \n"
+   echo -ne "\t\t\tpng plots are produced using the custom script scaleq.py. [Default: \"png\"] \n"
    echo
    echo -ne "\t--noscatterplot\tWhen this argument is set to 'yes', no length vs. quality scatterplot is generated. Since this is a time-consuming step, \n"
    echo -ne "\t\t\tthis possiblity has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip \n"
@@ -58,12 +65,15 @@ Help()
 
 Version()
 {
-    echo -ne "proname_filter from the PRONAME pipeline, version 1.1.0\n\n"
+    echo -ne "proname_filter from the PRONAME pipeline, version 2.0.0\n\n"
 }
 
+# Variable default values
 num_threads="2"
 delete_non_essential="no"
 no_scatterplot="no"
+no_counting="no"
+plot_format="png"
 
 # Transform long options to short ones
 
@@ -80,6 +90,8 @@ for arg in "$@"; do
     '--threads')         set -- "$@" '-f'   ;;
     '--deletefiles')     set -- "$@" '-r'   ;;
     '--noscatterplot')   set -- "$@" '-i'   ;;
+    '--nocounting')      set -- "$@" '-j'   ;;
+    '--plotformat')      set -- "$@" '-k'   ;;
     *)                   set -- "$@" "$arg" ;;
   esac
 done
@@ -87,7 +99,7 @@ done
 
 # Parse short options
 
-while getopts :hva:b:c:d:e:f:r:i: flag
+while getopts :hva:b:c:d:e:f:r:i:j:k: flag
 do
     case "${flag}" in
         h) Help
@@ -102,6 +114,8 @@ do
         f) num_threads=${OPTARG};;
         r) delete_non_essential=${OPTARG};;
         i) no_scatterplot=${OPTARG};;
+        j) no_counting=${OPTARG};;
+        k) plot_format=${OPTARG};;
         \?) # Invalid option
                 echo -ne "Error: Invalid option\n"
                 echo -ne "Please consult the help menu with 'proname_filter --help'\n"
@@ -116,6 +130,13 @@ if [ ! "$data_type" ] || [ ! "$filt_min_length" ] || [ ! "$filt_max_length" ] ||
   echo -ne "\n\033[31m\033[1mError: arguments --datatype, --filtminlen, --filtmaxlen, --filtminqual and --inputpath must be provided\033[0m\n\n"
   echo -ne "Please consult the help menu with 'proname_filter --help'\n"
   exit;
+fi
+
+if [[ "$plot_format" != "png" && "$plot_format" != "html" ]]
+then
+   echo -ne "\n\033[31m\033[1mError: the value of the --plotformat argument must be 'png' or 'html'.\033[0m\n\n"
+   echo -ne "Please consult the help menu with 'proname_filter --help'\n"
+   exit 1
 fi
 
 ######################################################
@@ -181,39 +202,51 @@ then
       exit;
    fi
 
-   # Counting duplex reads
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality duplex reads in the dataset...\033[0m\n"
+   if [ "$no_counting" != "yes" ]
+   then
+      # Counting duplex reads
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality duplex reads in the dataset...\033[0m\n"
 
-   echo -ne "Sample_name\tHQ_duplex_reads\n$(\
-   for sample in $(ls ${fastq_folder} | awk -F '.fastq' '{print $1}')
-   do
-     paste \
-       <(printf %s ${sample}) \
-       <(grep -c -f <(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_duplex_seqs.fastq | cut -d "@" -f 2  | cut -d " " -f 1) Rawseqids/rawseqids_${sample})
-   done)\n" > HQ_duplex_read_distribution.tsv
+      seqkit seq -n HQ/HQ_duplex_seqs.fastq > HQ_duplex_read_ids.txt
 
-   nhqduplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_duplex_seqs.fastq | wc -l)
+      echo -ne "Sample_name\tHQ_duplex_reads\n$(\
+      parallel -j ${num_threads} '
+         hq_duplex_count=$(grep -F -f HQ_duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
+         echo -e "{}\t${hq_duplex_count}"
+      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > HQ_duplex_read_distribution.tsv
 
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mCounting completed! \033[0m\n\n"
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : There are ${nhqduplex} high-quality duplex reads in the dataset. Here is their distribution in each sample:\n\n$(cat HQ_duplex_read_distribution.tsv)\n\nThese results have been saved as \e[34mHQ_duplex_read_distribution.tsv\e[0m\n\n"
-     
+      rm HQ_duplex_read_ids.txt
+
+      nhqduplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_duplex_seqs.fastq | wc -l)
+
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mCounting completed! \033[0m\n\n"
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : There are ${nhqduplex} high-quality duplex reads in the dataset. Here is their distribution in each sample:\n\n$(cat HQ_duplex_read_distribution.tsv)\n\nThese results have been saved as \e[34mHQ_duplex_read_distribution.tsv\e[0m\n\n"
+   fi
 
    # Visualization of data quality
    if [ "$no_scatterplot" != "yes" ]
    then
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCreating Length vs Quality scatter plots...\033[0m\n"
 
-      NanoPlot \
-        -t ${num_threads} \
-        --fastq HQ/HQ_duplex_seqs.fastq \
-        -o NanoPlot_visualizations_HQ
-      cp NanoPlot_visualizations_HQ/LengthvsQualityScatterPlot_dot.png LengthvsQualityScatterPlot_HQ_duplex.png
-      cp NanoPlot_visualizations_HQ/LengthvsQualityScatterPlot_dot.html LengthvsQualityScatterPlot_HQ_duplex.html
-      rm -r NanoPlot_visualizations_HQ
-
-      if [ -e "LengthvsQualityScatterPlot_HQ_duplex.png" ]
+      if [ ${plot_format} = "png" ]
       then
-         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mScatter plot saved as\033[0m \e[34mLengthvsQualityScatterPlot_HQ_duplex.png/html\e[0m\n\n"
+         scaleq.py \
+            --fastq HQ/HQ_duplex_seqs.fastq
+         mv length_vs_quality_plot.png LengthvsQualityScatterPlot_HQ_duplex.png
+
+      elif [ ${plot_format} = "html" ]
+      then
+         NanoPlot \
+            -t ${num_threads} \
+            --fastq HQ/HQ_duplex_seqs.fastq \
+            -o NanoPlot_visualizations_HQ
+         cp NanoPlot_visualizations_HQ/LengthvsQualityScatterPlot_dot.html LengthvsQualityScatterPlot_HQ_duplex.html
+         rm -r NanoPlot_visualizations_HQ
+      fi
+
+      if [ -e "LengthvsQualityScatterPlot_HQ_duplex.${plot_format}" ]
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mScatter plot saved as\033[0m \e[34mLengthvsQualityScatterPlot_HQ_duplex.${plot_format}\e[0m\n\n"
          echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : The next script of the pipeline to use is \033[1mproname_refine\033[0m.\n\n"
          echo -ne "\nUsage example:"
          echo -ne "\n-------------"
@@ -260,22 +293,26 @@ then
       exit;
    fi
 
-   # Counting simplex reads
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality simplex reads in the dataset...\033[0m\n"
+   if [ "$no_counting" != "yes" ]
+   then
+      # Counting simplex reads
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality simplex reads in the dataset...\033[0m\n"
 
-   echo -ne "Sample_name\tHQ_simplex_reads\n$(\
-   for sample in $(ls ${fastq_folder} | awk -F '.fastq' '{print $1}')
-   do
-     paste \
-       <(printf %s ${sample}) \
-       <(grep -c -x -f <(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | cut -d "@" -f 2  | cut -d " " -f 1) <(cut -d " " -f 1 Rawseqids/rawseqids_${sample}))
-   done)\n" > HQ_simplex_read_distribution.tsv
+      seqkit seq -n HQ/HQ_simplex_seqs.fastq > HQ_simplex_read_ids.txt
 
-   nhqsimplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | wc -l)
+      echo -ne "Sample_name\tHQ_simplex_reads\n$(\
+      parallel -j ${num_threads} '
+         hq_simplex_count=$(grep -F -f HQ_simplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
+         echo -e "{}\t${hq_simplex_count}"
+      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > HQ_simplex_read_distribution.tsv
 
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mCounting completed! \033[0m\n\n"
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : There are ${nhqsimplex} high-quality simplex reads in the dataset. Here is their distribution in each sample:\n\n$(cat HQ_simplex_read_distribution.tsv)\n\nThese results have been saved as \e[34mHQ_simplex_read_distribution.tsv\e[0m\n\n"
-     
+      rm HQ_simplex_read_ids.txt
+
+      nhqsimplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | wc -l)
+
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mCounting completed! \033[0m\n\n"
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : There are ${nhqsimplex} high-quality simplex reads in the dataset. Here is their distribution in each sample:\n\n$(cat HQ_simplex_read_distribution.tsv)\n\nThese results have been saved as \e[34mHQ_simplex_read_distribution.tsv\e[0m\n\n"
+   fi
 
    # Visualization of data quality
 
@@ -283,17 +320,25 @@ then
    then
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCreating Length vs Quality scatter plots...\033[0m\n"
 
-      NanoPlot \
-        -t ${num_threads} \
-        --fastq HQ/HQ_simplex_seqs.fastq \
-        -o NanoPlot_visualizations_HQ
-      cp NanoPlot_visualizations_HQ/LengthvsQualityScatterPlot_dot.png LengthvsQualityScatterPlot_HQ_simplex.png
-      cp NanoPlot_visualizations_HQ/LengthvsQualityScatterPlot_dot.html LengthvsQualityScatterPlot_HQ_simplex.html
-      rm -r NanoPlot_visualizations_HQ
-
-      if [ -e "LengthvsQualityScatterPlot_HQ_simplex.png" ]
+      if [ ${plot_format} = "png" ]
       then
-         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mScatter plot saved as\033[0m \e[34mLengthvsQualityScatterPlot_HQ_simplex.png/html\e[0m\n\n"
+         scaleq.py \
+            --fastq HQ/HQ_simplex_seqs.fastq
+         mv length_vs_quality_plot.png LengthvsQualityScatterPlot_HQ_simplex.png
+
+      elif [ ${plot_format} = "html" ]
+      then
+         NanoPlot \
+            -t ${num_threads} \
+            --fastq HQ/HQ_simplex_seqs.fastq \
+            -o NanoPlot_visualizations_HQ
+         cp NanoPlot_visualizations_HQ/LengthvsQualityScatterPlot_dot.html LengthvsQualityScatterPlot_HQ_simplex.html
+         rm -r NanoPlot_visualizations_HQ
+      fi
+
+      if [ -e "LengthvsQualityScatterPlot_HQ_simplex.${plot_format}" ]
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mScatter plot saved as\033[0m \e[34mLengthvsQualityScatterPlot_HQ_simplex.${plot_format}\e[0m\n\n"
          echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : The next script of the pipeline to use is \033[1mproname_refine\033[0m.\n\n"
          echo -ne "\nUsage example:"
          echo -ne "\n-------------"
@@ -340,26 +385,34 @@ then
       exit;
    fi
 
-   # Separating duplex from simplex reads and counting them
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality duplex and simplex reads in the dataset...\033[0m\n"
-   awk '/^@.*;/ && !skip {print; getline; print; getline; print; getline; print} {skip = (/^\+$/)}' HQ/HQ_simplex_duplex_seqs.fastq > HQ/HQ_duplex_seqs.fastq
-   awk '/^@/ && !/;/ && !skip {print; getline; print; getline; print; getline; print} {skip = (/^\+$/)}' HQ/HQ_simplex_duplex_seqs.fastq > HQ/HQ_simplex_seqs.fastq
+   # Separating duplex from simplex reads
+   seqkit grep -j ${num_threads} -n -r -p ';' HQ/HQ_simplex_duplex_seqs.fastq -o HQ/HQ_duplex_seqs.fastq
+   seqkit grep -j ${num_threads} -n -v -r -p ';' HQ/HQ_simplex_duplex_seqs.fastq -o HQ/HQ_simplex_seqs.fastq
 
-   echo -ne "Sample_name\tHQ_simplex_reads\tHQ_duplex_reads\n$(\
-   for sample in $(ls ${fastq_folder} | awk -F '.fastq' '{print $1}')
-   do
-     paste \
-       <(printf %s ${sample}) \
-       <(grep -f <(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | cut -d "@" -f 2 | cut -d " " -f 1) Rawseqids/rawseqids_${sample} | grep -v ";" | wc -l) \
-       <(grep -c -f <(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_duplex_seqs.fastq | cut -d "@" -f 2  | cut -d " " -f 1) Rawseqids/rawseqids_${sample}) 
-   done)\n" > HQ_simplex_duplex_read_distribution.tsv
+   if [ "$no_counting" != "yes" ]
+   then
+      # Counting duplex and simplex reads
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality duplex and simplex reads in the dataset...\033[0m\n"
 
-   nhqsimplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | wc -l)
-   nhqduplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_duplex_seqs.fastq | wc -l)
+      seqkit seq -n HQ/HQ_simplex_seqs.fastq > HQ_simplex_read_ids.txt
+      seqkit seq -n HQ/HQ_duplex_seqs.fastq > HQ_duplex_read_ids.txt
 
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mCounting completed! \033[0m\n\n"
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : There are ${nhqsimplex} high-quality simplex reads and ${nhqduplex} high-quality duplex reads in the dataset. Here is their distribution in each sample:\n\n$(cat HQ_simplex_duplex_read_distribution.tsv)\n\nThese results have been saved as \e[34mHQ_simplex_duplex_read_distribution.tsv\e[0m\n\n"
-     
+      echo -ne "Sample_name\tHQ_simplex_reads\tHQ_duplex_reads\n$(\
+      parallel -j ${num_threads} '
+         hq_simplex_count=$(grep -F -f HQ_simplex_read_ids.txt Rawseqids/rawseqids_{} | grep -v ";" | wc -l)
+         hq_duplex_count=$(grep -F -f HQ_duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
+         echo -e "{}\t${hq_simplex_count}\t${hq_duplex_count}"
+      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > HQ_simplex_duplex_read_distribution.tsv
+
+      rm HQ_simplex_read_ids.txt
+      rm HQ_duplex_read_ids.txt
+
+      nhqsimplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | wc -l)
+      nhqduplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_duplex_seqs.fastq | wc -l)
+
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mCounting completed! \033[0m\n\n"
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : There are ${nhqsimplex} high-quality simplex reads and ${nhqduplex} high-quality duplex reads in the dataset. Here is their distribution in each sample:\n\n$(cat HQ_simplex_duplex_read_distribution.tsv)\n\nThese results have been saved as \e[34mHQ_simplex_duplex_read_distribution.tsv\e[0m\n\n"
+   fi
 
    # Visualization of data quality
 
@@ -367,17 +420,25 @@ then
    then
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCreating Length vs Quality scatter plots...\033[0m\n"
 
-      NanoPlot \
-        -t ${num_threads} \
-        --fastq HQ/HQ_simplex_duplex_seqs.fastq \
-        -o NanoPlot_visualizations_HQ
-      cp NanoPlot_visualizations_HQ/LengthvsQualityScatterPlot_dot.png LengthvsQualityScatterPlot_HQ_simplex_duplex.png
-      cp NanoPlot_visualizations_HQ/LengthvsQualityScatterPlot_dot.html LengthvsQualityScatterPlot_HQ_simplex_duplex.html
-      rm -r NanoPlot_visualizations_HQ
-
-      if [ -e "LengthvsQualityScatterPlot_HQ_simplex_duplex.png" ]
+      if [ ${plot_format} = "png" ]
       then
-         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mScatter plot saved as\033[0m \e[34mLengthvsQualityScatterPlot_HQ_simplex_duplex.png/html\e[0m\n\n"
+         scaleq.py \
+            --fastq HQ/HQ_simplex_duplex_seqs.fastq
+         mv length_vs_quality_plot.png LengthvsQualityScatterPlot_HQ_simplex_duplex.png
+
+      elif [ ${plot_format} = "html" ]
+      then
+         NanoPlot \
+            -t ${num_threads} \
+            --fastq HQ/HQ_simplex_duplex_seqs.fastq \
+            -o NanoPlot_visualizations_HQ
+         cp NanoPlot_visualizations_HQ/LengthvsQualityScatterPlot_dot.html LengthvsQualityScatterPlot_HQ_simplex_duplex.html
+         rm -r NanoPlot_visualizations_HQ
+      fi
+
+      if [ -e "LengthvsQualityScatterPlot_HQ_simplex_duplex.${plot_format}" ]
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mScatter plot saved as\033[0m \e[34mLengthvsQualityScatterPlot_HQ_simplex_duplex.${plot_format}\e[0m\n\n"
          echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : The next script of the pipeline to use is \033[1mproname_refine\033[0m.\n\n"
          echo -ne "\nUsage example:"
          echo -ne "\n-------------"
@@ -415,4 +476,6 @@ unset simplex_fastq
 unset simplex_duplex_fastq
 unset delete_non_essential
 unset no_scatterplot
+unset no_counting
+unset plot_format
 

@@ -14,10 +14,15 @@ Help()
 ## Display Help
    echo -ne "\nThe proname_refine script is the third part of the PRONAME pipeline. This script carries out the clustering of high-quality sequence data coming from proname_filter, \nand the subsequent polishing with a tool dedicated to Nanopore data (i.e. medaka). Optionally, the script can import the generated files into QIIME2 for further processing."
    echo
-   echo -ne "\nSyntax: proname_refine [--clusterid|--clusterthreads|--inputpath|--subsampledreads|--medakabatchsize|--medakathreads|--medakamodel|--chimeradb|--qiime2import|--version|--help]"
+   echo -ne "\nSyntax: proname_refine [--clusteringmethod|--clusterid|--clusterthreads|--inputpath|--subsampledreads|--medakabatchsize|--medakathreads|--medakamodel|--chimeramethod|--chimeradb|--qiime2import|--version|--help]"
    echo
    echo "Options:"
-   echo -ne "\t--clusterid\t\tThe percentage of identity at which clustering should be performed. [Option: decimal between 0 and 1]\n"
+   echo -ne "\t--clusteringmethod\tThe tool used to cluster sequences. It can be either \"vsearch\" or \"mmseqs2\". VSEARCH offers \n"
+   echo -ne "\t\t\t\thigh accuracy and is well-suited for small to medium datasets, but can be slower on large datasets. MMseqs2 is \n"
+   echo -ne "\t\t\t\tslightly less accurate but dramatically faster, especially on large datasets. [Options: \"vsearch\" or \n"
+   echo -ne "\t\t\t\t\"mmseqs2\", Default: \"vsearch\"] \n"
+   echo
+   echo -ne "\t--clusterid\t\tThe percentage of identity at which clustering should be performed. [Options: decimal between 0 and 1]\n"
    echo
    echo -ne "\t--clusterthreads\tNumber of threads to use for the clustering step. You can know the number of available threads on your computer \n"
    echo -ne "\t\t\t\tby running the command 'nproc --all' [Default: 2]\n"
@@ -30,21 +35,24 @@ Help()
    echo -ne "\t--medakabatchsize\tControls memory use. The default value has been set to 100. If Medaka shows out of memory errors, \n"
    echo -ne "\t\t\t\tthe batch size should be reduced. [Default: 100]\n"
    echo
-   echo -ne "\t--medakathreads\t\tNumber of threads to use for the polishing step. This option determines the number of CPU threads \n"
-   echo -ne "\t\t\t\tused for data loading and preprocessing, but not for consensus generation itself. Increasing this value beyond 2 \n"
-   echo -ne "\t\t\t\tdoes not significantly improve performance because Medaka automatically uses additional threads for background \n"
-   echo -ne "\t\t\t\tprocessing. If running Medaka on a CPU, setting --medakathreads to 2 is recommended. If running on a GPU, this \n"
-   echo -ne "\t\t\t\tsetting has little impact, as the main computation is handled by PyTorch and CUDA. [Default: 2]\n"
+   echo -ne "\t--medakathreads\t\tNumber of threads to use for the polishing step. If running Medaka on a CPU, it is recommended to \n"
+   echo -ne "\t\t\t\tset this value to the maximum number of available threads. PRONAME will automatically split the polishing process \n"
+   echo -ne "\t\t\t\tinto multiple parallel jobs to significantly increase the analysis speed. Each job uses 2 threads for Medaka, with \n"
+   echo -ne "\t\t\t\t2 additional threads allocated to each job for parallel overhead. \n"
+   echo -ne "\t\t\t\tIf running on a GPU, this setting has little impact, as the main computation is handled by PyTorch and CUDA. [Default: 4]\n"
    echo
    echo -ne "\t--medakamodel\t\tBasecalling model used to generate raw fastq files. This model will be used by medaka to polish data.\n"
    echo -ne "\t\t\t\tThe list of available models can be found by running 'medaka tools list\_models'\n"
    echo
-   echo -ne "\t--chimeradb\t\tPath to the reference database to use for the chimera detection.\n"
+   echo -ne "\t--chimeramethod\t\tSpecify the chimera detection method: \"ref\" (reference-based) or \"denovo\" (de novo detection). [Default: \"ref\"]\n"
    echo
-   echo -ne "\t--qiime2import\t\tIndicate whether the generated representative sequences and table must be imported into QIIME2. [Option: \"yes\" or \"no\"]\n"
+   echo -ne "\t--chimeradb\t\tPath to the reference database to use for the chimera detection. This argument is required only \n"
+   echo -ne "\t\t\t\tif --chimeramethod = \"ref\" (reference-based chimera detection).\n"
+   echo
+   echo -ne "\t--qiime2import\t\tIndicate whether the generated representative sequences and table must be imported into QIIME2. [Options: \"yes\" or \"no\"]\n"
    echo
    echo -ne "\t--deletefiles\t\tDelete all non-essential files, i.e. files generated with proname_filter that are no more needed for the rest of \n"
-   echo -ne "\t\t\t\tthe analysis through PRONAME. [Option: \"yes\" or \"no\", Default: no] \n"
+   echo -ne "\t\t\t\tthe analysis through PRONAME. [Options: \"yes\" or \"no\", Default: no] \n"
    echo
    echo -ne "\t--version\t\tPrint the version of the pipeline.\n"
    echo
@@ -67,14 +75,19 @@ Help()
 
 Version()
 {
-    echo -ne "proname_refine from the PRONAME pipeline, version 1.1.0\n\n"
+    echo -ne "proname_refine from the PRONAME pipeline, version 2.0.0\n\n"
 }
 
+
+# Variable default values
 clustering_threads="2"
 n_subsampled_reads="300"
 medaka_batchsize="100"
-medaka_threads="2"
+medaka_threads="4"
 delete_non_essential="no"
+clustering_method="vsearch"
+chimera_method="ref"
+
 
 # Transform long options to short ones
 
@@ -92,6 +105,8 @@ for arg in "$@"; do
     '--medakamodel')        set -- "$@" '-g'   ;;
     '--chimeradb')          set -- "$@" '-i'   ;;
     '--qiime2import')       set -- "$@" '-j'   ;;
+    '--clusteringmethod')   set -- "$@" '-k'   ;;
+    '--chimeramethod')      set -- "$@" '-l'   ;;
     '--deletefiles')        set -- "$@" '-r'   ;;
     *)                      set -- "$@" "$arg" ;;
   esac
@@ -100,7 +115,7 @@ done
 
 # Parse short options
 
-while getopts :hva:b:c:d:e:f:g:i:j:r: flag
+while getopts :hva:b:c:d:e:f:g:i:j:k:l:r: flag
 do
     case "${flag}" in
         h) Help
@@ -116,6 +131,8 @@ do
         g) medaka_model=${OPTARG};;
         i) chimera_db=${OPTARG};;
         j) qiime2_import=${OPTARG};;
+        k) clustering_method=${OPTARG};;
+        l) chimera_method=${OPTARG};;
         r) delete_non_essential=${OPTARG};;
         \?) # Invalid option
                 echo -ne "Error: Invalid option\n"
@@ -127,10 +144,32 @@ done
 
 # Mandatory arguments
 
-if [ ! "$clustering_id" ] || [ ! "$fastq_folder" ] || [ ! "$medaka_model" ] || [ ! "$chimera_db" ]  || [ ! "$qiime2_import" ]; then
-  echo -ne "\n\033[31m\033[1mError: arguments --clusterid, --inputpath, --medakamodel, --chimeradb and --qiime2import must be provided\033[0m\n\n"
-  echo -ne "Please consult the help menu with 'proname_refine --help'\n"
-  exit;
+if [ ! "$clustering_id" ] || [ ! "$fastq_folder" ] || [ ! "$medaka_model" ] || [ ! "$qiime2_import" ]
+then
+   echo -ne "\n\033[31m\033[1mError: arguments --clusterid, --inputpath, --medakamodel, --chimeradb and --qiime2import must be provided\033[0m\n\n"
+   echo -ne "Please consult the help menu with 'proname_refine --help'\n"
+   exit 1
+fi
+
+if { [ "$chimera_method" = "ref" ] && [ ! "$chimera_db" ]; }
+then
+   echo -ne "\n\033[31m\033[1mError: The argument --chimeradb must be provided if --chimeramethod = \"ref\" (reference-based chimera detection).\033[0m\n\n"
+   echo -ne "Please consult the help menu with 'proname_refine --help'\n"
+   exit 1
+fi
+
+if [[ "$chimera_method" != "ref" && "$chimera_method" != "denovo" ]]
+then
+   echo -ne "\n\033[31m\033[1mError: the value of the --chimeramethod argument must be 'ref' or 'denovo'.\033[0m\n\n"
+   echo -ne "Please consult the help menu with 'proname_refine --help'\n"
+   exit 1
+fi
+
+if [[ "$clustering_method" != "vsearch" && "$clustering_method" != "mmseqs2" ]]
+then
+   echo -ne "\n\033[31m\033[1mError: the value of the --clusteringmethod argument must be 'vsearch' or 'mmseqs2'.\033[0m\n\n"
+   echo -ne "Please consult the help menu with 'proname_refine --help'\n"
+   exit 1
 fi
 
 ######################################################
@@ -175,89 +214,116 @@ fi
 # Removing items from a potential previous failed run
 
 rm -rf vsearch_clusters
+rm -rf mmseqs2_clusters
 rm -f cluster*_seq_count
 
 # Clustering reads into OTUs
 
 echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mClustering reads...\033[0m\n"
 
-mkdir vsearch_clusters
+if [ ${clustering_method} = "vsearch" ]
+then
+   mkdir vsearch_clusters
 
-vsearch \
-  --cluster_fast ${HQ_fastq} \
-  --id ${clustering_id} \
-  --strand both \
-  --threads ${clustering_threads} \
-  --clusters vsearch_clusters/cluster
+   vsearch \
+     --cluster_fast ${HQ_fastq} \
+     --id ${clustering_id} \
+     --strand both \
+     --threads ${clustering_threads} \
+     --clusters vsearch_clusters/cluster
 
-remove_singletons.py vsearch_clusters
+   remove_singletons.py vsearch_clusters > /dev/null 2>&1
 
 
-# Recording clustered reads according to their sample provenance
+   # Recording clustered reads according to their sample provenance
 
-for cluster in $(ls vsearch_clusters)
-do
+   cluster_reads_count.py "${clustering_method}_clusters" "${fastq_folder}" "Rawseqids"
 
-   cluster_seqs=$(grep ">" vsearch_clusters/${cluster} | cut -d ">" -f 2)
+   if find vsearch_clusters -name 'cluster*' | grep -q . 1> /dev/null 2>&1
+   then
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead clustering completed! \033[0m\n"
+   else
+      echo -ne "\n\033[31m\033[1mError: read clustering failed. \033[0m\n\n"
+      echo -ne "Please consult the help menu.\n"
+      exit;
+   fi
 
-   for sample in $(ls ${fastq_folder} | awk -F '.fastq' '{print $1}')
+   # Splitting clusters into 2 files
+
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mSplitting clusters into two files...\033[0m\n"
+
+   for i in vsearch_clusters/*;do seqkit split -p 2 $i;done
+
+   if find vsearch_clusters -name '*split*' | grep -q . 1> /dev/null 2>&1
+   then
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mSplitting completed! \033[0m\n"
+   else
+      echo -ne "\n\033[31m\033[1mError: cluster splitting failed. \033[0m\n\n"
+      echo -ne "Please consult the help menu.\n"
+      exit;
+   fi
+
+   # Extracting centroid sequences
+
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mExtracting centroid sequences...\033[0m\n"
+
+   for i in $(ls vsearch_clusters | grep "split" | cut -d "." -f 1)
    do
-      paste <(printf %s ${sample}) <(grep -c -f <(echo $cluster_seqs | sed 's/ /\n/g') Rawseqids/rawseqids_${sample})
-   done > ${cluster}_seq_count
-done
+      seqkit range -r -1:-1 vsearch_clusters/${i}.split/${i}.part_001 -w 0 -o vsearch_clusters/centroid_${i}.fasta
+   done
 
-if find vsearch_clusters -name 'cluster*' | grep -q . 1> /dev/null 2>&1
+   if find vsearch_clusters -name 'centroid*' | grep -q . 1> /dev/null 2>&1
+   then
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mExtraction completed! \033[0m\n"
+   else
+      echo -ne "\n\033[31m\033[1mError: centroid extraction failed. \033[0m\n\n"
+      echo -ne "Please consult the help menu.\n"
+      exit;
+   fi
+elif [ ${clustering_method} = "mmseqs2" ]
 then
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead clustering completed! \033[0m\n"
-else
-   echo -ne "\n\033[31m\033[1mError: read clustering failed. \033[0m\n\n"
-   echo -ne "Please consult the help menu.\n"
-   exit;
-fi
+   mkdir mmseqs2_clusters
 
-# Splitting clusters into 2 files
+   seqkit fq2fa "$HQ_fastq" -o "${HQ_fastq%.fastq}.fasta"
 
-echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mSplitting clusters into two files...\033[0m\n"
+   export HQ_fastq="${HQ_fastq%.fastq}.fasta"
 
-for i in vsearch_clusters/*;do seqkit split -p 2 $i;done
+   mmseqs easy-cluster "${HQ_fastq}" output tmp --min-seq-id ${clustering_id} --threads ${clustering_threads} 2> /dev/null
 
-if find vsearch_clusters -name '*split*' | grep -q . 1> /dev/null 2>&1
-then
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mSplitting completed! \033[0m\n"
-else
-   echo -ne "\n\033[31m\033[1mError: cluster splitting failed. \033[0m\n\n"
-   echo -ne "Please consult the help menu.\n"
-   exit;
-fi
+   # Extracting clusters and centroid sequences
 
-# Extracting centroid sequences
+   extract_mmseqs2_clusters.py
 
-echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mExtracting centroid sequences...\033[0m\n"
+   # Removing singletons
 
-for i in $(ls vsearch_clusters | grep "split" | cut -d "." -f 1)
-do
-   seqkit range -r -1:-1 vsearch_clusters/${i}.split/${i}.part_001 -w 0 -o vsearch_clusters/centroid_${i}.fasta
-done
+   remove_singletons.py mmseqs2_clusters > /dev/null 2>&1
 
-if find vsearch_clusters -name 'centroid*' | grep -q . 1> /dev/null 2>&1
-then
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mExtraction completed! \033[0m\n"
-else
-   echo -ne "\n\033[31m\033[1mError: centroid extraction failed. \033[0m\n\n"
-   echo -ne "Please consult the help menu.\n"
-   exit;
+   # Recording clustered reads according to their sample provenance
+
+   cluster_reads_count.py "${clustering_method}_clusters" "${fastq_folder}" "Rawseqids"
+
+   if find mmseqs2_clusters -name 'cluster*' | grep -q . 1> /dev/null 2>&1
+   then
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead clustering completed! \033[0m\n"
+   else
+      echo -ne "\n\033[31m\033[1mError: read clustering failed. \033[0m\n\n"
+      echo -ne "Please consult the help menu.\n"
+      exit;
+   fi
+   rm -r tmp
+   rm output_*
 fi
 
 # Randomly subsampling N reads
 
 echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mSubsampling reads in each cluster...\033[0m\n"
 
-for i in $(ls vsearch_clusters | grep "split" | cut -d "." -f 1)
+for i in $(ls ${clustering_method}_clusters | grep "centroid" | cut -d '_' -f 2 | cut -d '.' -f 1)
 do
-   seqkit shuffle -s 23 vsearch_clusters/$i 2>/dev/null | seqkit head -n ${n_subsampled_reads} -w 0 -o vsearch_clusters/subreads_${i}.fasta
+   seqkit shuffle -s 23 ${clustering_method}_clusters/$i 2>/dev/null | seqkit head -n ${n_subsampled_reads} -w 0 -o ${clustering_method}_clusters/subreads_${i}.fasta
 done
 
-if find vsearch_clusters -name 'subreads*' | grep -q . 1> /dev/null 2>&1
+if find ${clustering_method}_clusters -name 'subreads*' | grep -q . 1> /dev/null 2>&1
 then
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mSubsampling completed! \033[0m\n"
 else
@@ -266,22 +332,66 @@ else
    exit;
 fi
 
-# Generating consensus sequences
 
-echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCarrying out medaka polishing to generate consensus sequences...\033[0m\n"
+# Defining the global function for parallel polishing
+medaka_polishing() {
+   local medaka_threads="${medaka_threads}"
+   local medaka_model="${medaka_model}"
+   local medaka_batchsize="${medaka_batchsize}"
+   local clustering_method="${clustering_method}"
 
-for i in $(ls vsearch_clusters | grep "split" | cut -d "." -f 1)
-do
-   medaka_consensus \
-      -d vsearch_clusters/centroid_${i}.fasta \
-      -i vsearch_clusters/subreads_${i}.fasta \
-      -b ${medaka_batchsize} \
-      -t ${medaka_threads} \
-      -m ${medaka_model} \
-      -o vsearch_clusters/medaka_${i}
-done
+   # Generating consensus sequences
 
-if find vsearch_clusters -name 'medaka*' | grep -q . 1> /dev/null 2>&1
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCarrying out medaka polishing to generate consensus sequences...\033[0m\n"
+
+   # Computing the number of parallel jobs
+   local PARALLEL_JOBS=$(( medaka_threads / 4 ))
+
+   if [ "${PARALLEL_JOBS}" -lt 1 ]
+   then
+      PARALLEL_JOBS=1
+   fi
+   echo "Launching polishing in parallel using ${PARALLEL_JOBS} jobs (4 threads per job)."
+
+   # Generating cluster IDs
+   local CLUSTER_IDS=$(find ${clustering_method}_clusters -type f -name "subreads_cluster*.fasta" | xargs -n1 basename | cut -d '_' -f 2 | cut -d '.' -f 1)
+
+   if [ -z "${CLUSTER_IDS}" ]
+   then
+      echo "Error: No clusters found!"
+      exit 1
+   fi
+
+   # Exporting variables for parallel
+   export medaka_model
+   export medaka_batchsize
+   export clustering_method
+
+   # Polishing function
+   polish_cluster() {
+      local cluster_id="$1"
+
+      medaka_consensus \
+         -d ${clustering_method}_clusters/centroid_${cluster_id}.fasta \
+         -i ${clustering_method}_clusters/subreads_${cluster_id}.fasta \
+         -b "${medaka_batchsize}" \
+         -t 2 \
+         -m "${medaka_model}" \
+         -o ${clustering_method}_clusters/medaka_${cluster_id}
+
+   }
+   export -f polish_cluster
+
+   parallel -j "${PARALLEL_JOBS}" polish_cluster ::: ${CLUSTER_IDS}
+
+}
+
+# Calling polishing function
+medaka_polishing
+
+#############################
+
+if find ${clustering_method}_clusters -name 'medaka*' | grep -q . 1> /dev/null 2>&1
 then
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mPolishing completed! \033[0m\n"
 else
@@ -292,12 +402,15 @@ fi
 
 # Creating a linking table between clusters and their corresponding representative seqid
 
-for i in $(ls vsearch_clusters | grep "medaka" | cut -d "_" -f 2)
-do
-   paste \
-      <(printf %s $i) \
-      <(grep ">" vsearch_clusters/medaka_${i}/consensus.fasta | cut -d ">" -f 2)
-done > clusters_seqids_linking_table
+export clustering_method
+export medaka_threads
+
+find "${clustering_method}_clusters" -type f -name "consensus.fasta" -path "*medaka_*" | \
+parallel --jobs "$medaka_threads" --no-run-if-empty '
+    i=$(basename $(dirname {}) | cut -d "_" -f 2)
+    rep_seq=$(grep ">" {} | cut -d ">" -f 2)
+    printf "%s\t%s\n" "$i" "$rep_seq"
+' > clusters_seqids_linking_table
 
 
 # Creating the feature table
@@ -305,29 +418,46 @@ done > clusters_seqids_linking_table
 
 echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCreating a feature table...\033[0m\n"
 
-for i in $(ls | grep "seq_count" | cut -d "_" -f 1)
-do
-   echo -ne "Feature_ID\t$(grep "$i" clusters_seqids_linking_table | cut -d $'\t' -f 2)\n$(cat ${i}_seq_count)\n" > ${i}_seq_count_tmp
-   mv ${i}_seq_count_tmp ${i}_seq_count
-done
+add_header() {
+    sample_id=$(basename "$1" _seq_count)
+    header=$(awk -v id="$sample_id" '$1==id {print $2}' clusters_seqids_linking_table)
+    { echo -e "Feature_ID\t$header"; cat "$1"; } > "${1}_tmp" && mv "${1}_tmp" "$1"
+}
+export -f add_header
+
+parallel --jobs "$medaka_threads" --no-run-if-empty add_header ::: *_seq_count
 
 
 ## Merging all seq_count files
 
-for i in $(ls | grep "seq_count" | head -n 1)
-do
-   cut -d $'\t' -f 1 $i
-done > Global_table
+cut -f1 *_seq_count | sort -u > Global_table
 
-for i in *_seq_count
-do 
-   awk 'BEGIN {FS=OFS="\t"} NR==FNR{a[$1]=$2;next}{ for (i in a) if ($1 == i) {$(NF+1)=a[i]}}1' $i Global_table > Global_table_tmp && mv Global_table_tmp Global_table
+merge_column() {
+    join -t $'\t' -a1 -e 0 -o auto Global_table "$1" > Global_table.tmp && mv Global_table.tmp Global_table
+}
+export -f merge_column
+
+for f in *_seq_count; do
+    merge_column "$f"
 done
 
 
 ## Inverting lines and columns
 
-awk -F '\t' '{for (i=1; i<=NF; i++) {if (NR == 1) {col[i] = $i} else {col[i] = col[i] "\t" $i}}} END {for (i=1; col[i] != ""; i++) {print col[i]}}' Global_table > Global_table_tmp && mv Global_table_tmp Global_table
+awk '
+{
+    for (i=1; i<=NF; i++) {
+        a[i, NR] = $i
+    }
+}
+END {
+    for (i=1; i<=NF; i++) {
+        for (j=1; j<=NR; j++) {
+            printf "%s%s", a[i,j], (j<NR ? "\t" : "\n")
+        }
+    }
+}
+' Global_table > Global_table_tmp && mv Global_table_tmp Global_table
 
 if [ -e "Global_table" ]
 then
@@ -342,12 +472,21 @@ fi
 
 echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mRemoving chimera sequences...\033[0m\n"
 
-cat vsearch_clusters/medaka*/consensus.fasta > medaka_consensus_seqs.fasta
+find "${clustering_method}_clusters/" -path "${clustering_method}_clusters/medaka*/consensus.fasta" -exec cat {} + > medaka_consensus_seqs.fasta
 
-vsearch \
-  --uchime_ref medaka_consensus_seqs.fasta \
-  --db ${chimera_db} \
-  --nonchimeras rep_seqs.fasta
+if [ "$chimera_method" = "ref" ]
+then
+   vsearch \
+      --uchime_ref medaka_consensus_seqs.fasta \
+      --db ${chimera_db} \
+      --nonchimeras rep_seqs.fasta
+elif [ "$chimera_method" = "denovo" ]
+then
+   vsearch \
+      --uchime_denovo medaka_consensus_seqs.fasta \
+      --nonchimeras rep_seqs.fasta
+fi
+
 
 if [ -e "rep_seqs.fasta" ]
 then
@@ -372,52 +511,103 @@ rm *_seq_count
 rm clusters_seqids_linking_table
 rm Global_table
 rm medaka_consensus_seqs.fasta
-rm -r vsearch_clusters
+rm -r ${clustering_method}_clusters
 
 if [ ${qiime2_import} = "yes" ]
 then
-   # Data import into QIIME2
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mImporting representative sequences and table into QIIME2...\033[0m\n"
+   ARCH=$(uname -m)
 
-   biom convert -i rep_table.tsv -o rep_table.biom --table-type "OTU table" --to-hdf5
-
-   qiime tools import \
-     --input-path rep_table.biom \
-     --type 'FeatureTable[Frequency]' \
-     --input-format BIOMV210Format \
-     --output-path rep_table.qza > /dev/null 2>/dev/null
-
-   rm rep_table.biom
-
-   qiime tools import \
-     --type FeatureData[Sequence] \
-     --input-path rep_seqs.fasta \
-     --output-path rep_seqs.qza > /dev/null 2>/dev/null
-
-   echo -ne "sample-id\tsample-name\n#q2:types\tcategorical\n$(paste <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}') <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}'))\n" > sample_metadata.tsv
-
-   if [ -e "rep_table.qza" ] && [ -e "rep_seqs.qza" ]
+   if [[ "$ARCH" == "x86_64" ]]
    then
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mImport completed! \033[0m\n"
-   else
-      echo -ne "\n\033[31m\033[1mError: data import into QIIME2 failed. \033[0m\n\n"
-      echo -ne "Please consult the help menu.\n"
-      exit;
-   fi
+      # Data import into QIIME2
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mImporting representative sequences and table into QIIME2...\033[0m\n"
 
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : The next and last script of the pipeline to use is \033[1mproname_taxonomy\033[0m.\n\n"
-   echo -ne "\nUsage example:"
-   echo -ne "\n-------------"
-   echo
-   echo "proname_taxonomy \\"
-   echo "  --qseqs rep_seqs.qza \\"
-   echo "  --qtable rep_table.qza \\"
-   echo "  --db /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
-   echo "  --reftax /opt/db/rEGEN-B/rEGEN-B_taxonomy.tsv \\"
-   echo "  --metadata sample_metadata.tsv \\"
-   echo "  --assay assay1 \\"
-   echo "  --phyloseq yes"
-   echo
+      biom convert -i rep_table.tsv -o rep_table.biom --table-type "OTU table" --to-hdf5
+
+      qiime tools import \
+        --input-path rep_table.biom \
+        --type 'FeatureTable[Frequency]' \
+        --input-format BIOMV210Format \
+        --output-path rep_table.qza > /dev/null 2>/dev/null
+
+      rm rep_table.biom
+
+      qiime tools import \
+        --type FeatureData[Sequence] \
+        --input-path rep_seqs.fasta \
+        --output-path rep_seqs.qza > /dev/null 2>/dev/null
+
+      echo -ne "sample-id\tsample-name\n#q2:types\tcategorical\n$(paste <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}') <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}'))\n" > sample_metadata.tsv
+
+      if [ -e "rep_table.qza" ] && [ -e "rep_seqs.qza" ]
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mImport completed! \033[0m\n"
+      else
+         echo -ne "\n\033[31m\033[1mError: data import into QIIME2 failed. \033[0m\n\n"
+         echo -ne "Please consult the help menu.\n"
+         exit;
+      fi
+
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : The next and last script of the pipeline to use is \033[1mproname_taxonomy\033[0m.\n\n"
+      echo -ne "\nUsage example:"
+      echo -ne "\n-------------"
+      echo
+      echo "proname_taxonomy \\"
+      echo "  --qseqs rep_seqs.qza \\"
+      echo "  --qtable rep_table.qza \\"
+      echo "  --db /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
+      echo "  --reftax /opt/db/rEGEN-B/rEGEN-B_taxonomy.tsv \\"
+      echo "  --metadata sample_metadata.tsv \\"
+      echo "  --assay assay1 \\"
+      echo "  --phyloseq yes"
+      echo
+
+   elif [[ "$ARCH" == "aarch64" ]]
+   then
+      biom convert -i rep_table.tsv -o rep_table.biom --table-type "OTU table" --to-hdf5
+      echo -ne "sample-id\tsample-name\n#q2:types\tcategorical\n$(paste <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}') <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}'))\n" > sample_metadata.tsv
+
+      echo -ne "\n\033[1;33m!!! NOTE FOR ARM64 USERS !!!\033[0m\n"
+      echo -ne "The current Docker image runs on ARM64 architecture, and QIIME2 is not natively supported on ARM64.\n\n"
+      echo -ne "\e[4mYou have two options\e[0m:\n\n"
+      echo -ne "(i) If QIIME2 is installed on your host machine, run the following commands manually on it:\n\n"
+      echo -ne "\033[1m# Importing feature table into QIIME2\033[0m\n"
+      echo -ne "qiime tools import --input-path rep_table.biom --type 'FeatureTable[Frequency]' --input-format BIOMV210Format --output-path rep_table.qza\n\n"
+      echo -ne "\033[1m# Importing representative sequences into QIIME2\033[0m\n"
+      echo -ne "qiime tools import --type FeatureData[Sequence] --input-path rep_seqs.fasta --output-path rep_seqs.qza\n\n"
+      echo
+      echo -ne "(ii) If QIIME2 is not installed on your host machine, run the following commands manually on it:\n\n"
+      echo -ne "\033[1m# Importing feature table into QIIME2\033[0m\n"
+      echo -ne "docker run --rm -v /path/to/host/data:/data quay.io/qiime2/core:2024.5 qiime tools import \\ \n"
+      echo -ne "  --input-path rep_table.biom \\ \n"
+      echo -ne "  --type 'FeatureTable[Frequency]' \\ \n"
+      echo -ne "  --input-format BIOMV210Format \\ \n"
+      echo -ne "  --output-path rep_table.qza \n"
+      echo
+      echo -ne "\033[1m# Importing representative sequences into QIIME2\033[0m\n"
+      echo -ne "docker run --rm -v /path/to/host/data:/data quay.io/qiime2/core:2024.5 qiime tools import \\ \n"
+      echo -ne "  --type FeatureData[Sequence] \\ \n"
+      echo -ne "  --input-path rep_seqs.fasta \\ \n"
+      echo -ne "  --output-path rep_seqs.qza \n\n"
+
+      echo -ne "\033[1;33mOnce these files are ready, you can proceed to run \033[1mproname_taxonomy\033[0m.\033[0m\n\n"
+      echo -ne "\nUsage example:"
+      echo -ne "\n-------------"
+      echo
+      echo "proname_taxonomy \\"
+      echo "  --qseqs rep_seqs.qza \\"
+      echo "  --qtable rep_table.qza \\"
+      echo "  --db /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
+      echo "  --reftax /opt/db/rEGEN-B/rEGEN-B_taxonomy.tsv \\"
+      echo "  --metadata sample_metadata.tsv \\"
+      echo "  --assay assay1 \\"
+      echo "  --phyloseq yes"
+      echo
+   
+   else
+      echo -ne "\n\033[31m\033[1mError: Unknown system architecture '$ARCH'. Unable to decide QIIME2 strategy.\033[0m\n"
+      exit 1
+   fi
 
 else
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : The next and last script of the pipeline to use is \033[1mproname_taxonomy\033[0m.\n\n"
@@ -443,6 +633,7 @@ fi
 
 
 unset HQ_fastq
+unset clustering_method
 unset clustering_id
 unset clustering_threads
 unset fastq_folder
@@ -453,4 +644,6 @@ unset medaka_model
 unset chimera_db
 unset qiime2_import
 unset delete_non_essential
+unset chimera_method
+unset ARCH
 

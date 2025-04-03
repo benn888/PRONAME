@@ -28,11 +28,11 @@ To download an image, please run one of the following commands:
 
 - **Command to pull image for amd64 architecture:**  
   ```bash
-   docker pull benn888/proname:amd64
+   docker pull benn888/proname:v2.0.0-amd64
 
 - **Command to pull image for arm64 architecture:**  
   ```bash
-   docker pull benn888/proname:arm64
+   docker pull benn888/proname:v2.0.0-arm64
 Note that, depending on your installation, running Docker commands may require `sudo` privileges.
 
 You can run this command to confirm that the image has successfully been downloaded and is available:
@@ -44,14 +44,14 @@ docker images
 Then, the simplest way to run a new container is to use this command:
 
 ~~~
-docker run -it --name proname_container benn888/proname:<arch>
+docker run -it --name proname_container benn888/proname:v2.0.0-<arch>
 ~~~
 Where `<arch>` should be replaced by `amd64` or `arm64`.
 
 However, a more effective way to launch a container is to set up a shared volume that mounts a host directory directly in the container. This setup allows access to raw sequencing data in the container and enables direct access to PRONAME results from the host machine:
 
 ~~~
-docker run -it --name proname_container -v /path/to/host/data:/data benn888/proname:<arch>
+docker run -it --name proname_container -v /path/to/host/data:/data benn888/proname:v2.0.0-<arch>
 ~~~
 where `/path/to/host/data` is the path to the directory on your host machine containing the raw sequencing data, and `/data` is the directory in the container where this data will be accessible. Place any files resulting from the PRONAME analysis in `/data` to access them directly from the host machine.
 
@@ -85,6 +85,7 @@ proname_import \
   --threads 48 \
   --duplex yes \
   --trimadapters yes \
+  --sequencingkit SQK-LSK114 \
   --trimprimers yes \
   --fwdprimer AGRGTTYGATYMTGGCTCAG \
   --revprimer CGACATCGAGGTGCCAAAC
@@ -98,9 +99,12 @@ Here is the complete list of available arguments for `proname_import`:
 |  | --threads | Number of threads to use for the Guppy adapter-trimming step and/or the Cutadapt primmer-trimming step. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] | No |
 |  | --duplex | Indicate whether your sequencing data include duplex reads or not. Duplex reads are high-quality reads that were introduced with the kit 14 chemistry. [Option: "yes" or "no"] | Yes |
 |  | --trimadapters | Indicate whether your sequencing data contain adapters that should be trimmed. [Option: "yes" or "no"] | Yes |
+|  | --sequencingkit | Name of the ONT sequencing kit used to generate the library(-ies). [Default: "SQK-LSK114"] | No | 
 |  | --trimprimers | Indicate whether your sequencing data contain primers that should be trimmed. [Option: "yes" or "no"] | Yes |
 |  | --fwdprimer | The sequence of the forward primer used during PCR to amplify DNA. If barcoded primers were used to multiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. This argument is required if --trimprimers is set to "yes". | ~ |
 |  | --revprimer | The sequence of the reverse primer used during PCR to amplify DNA. If barcoded primers were used to multiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. This argument is required if --trimprimers is set to "yes". | ~ |
+|  | --nocounting | When this argument is set to "yes", counting of simplex/duplex reads is not performed. [Options: "yes" or "no", Default: "no"] | No |
+|  | --plotformat | Format of the scatterplot visualization files produced. It can be either "png" or "html". Since NanoPlot produces empty png plots for an unknown reason, it is only used to generate html visualizations. png plots are produced using the custom script scaleq.py. [Default: "png"] | No |
 |  | --noscatterplot | When this argument is set to 'yes', no length vs. quality scatterplot is generated. Since this is a time-consuming step, this possiblity has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip this scatterplot generation. Visual inspection of these plots is crucial for deciding which type of read to work with (duplex and/or simplex) and which length and quality thresholds to apply. [Options: "yes" or "no", Default: "no"] | No |
 |  | --version | Print the version of the pipeline. | No |
 |  | --help | Print the help menu. | No |
@@ -149,6 +153,8 @@ Here is the complete list of available arguments for `proname_filter`:
 |  | --threads | Number of threads to use. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] | No |
 |  | --inputpath | Path to the folder containing raw fastq files. This must be the same path than the one provided while running proname_import. | Yes |
 |  | --deletefiles | Delete all non-essential files, i.e. files generated with proname_import that are no more needed for the rest of the analysis through PRONAME. [Option: "yes" or "no", Default: no] | No |
+|  | --nocounting | When this argument is set to "yes", counting of HQ simplex/duplex reads is not performed. [Options: "yes" or "no", Default: "no"] | No |
+|  | --plotformat | Format of the scatterplot visualization file produced. It can be either "png" or "html". Since NanoPlot produces an empty png plot for an unknown reason, it is only used to generate html visualizations. png plots are produced using the custom script scaleq.py. [Default: "png"] | No |
 |  | --noscatterplot | When this argument is set to 'yes', no length vs. quality scatterplot is generated. Since this is a time-consuming step, this possiblity has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip this scatterplot generation. Visual inspection of these plots is crucial for deciding which type of read to work with (duplex and/or simplex) and which length and quality thresholds to apply. [Options: "yes" or "no", Default: "no"] | No |
 |  | --version | Print the version of the pipeline. | No |
 |  | --help | Print the help menu. | No |
@@ -181,6 +187,7 @@ The HQ duplex reads will now undergo a serie of processing steps wrapped in the 
 * The centroid sequence will be extracted from each cluster;
 * 300 other reads, defined as 'sub-reads', will be randomly extracted from each cluster;
 * Each centroid sequence will be polished using its associated sub-reads to generate an error-corrected consensus sequence;
+> ⚡ Version 2.0.0 introduced major improvements in polishing performance, with speedups of at least 10× observed on HPC systems.
 * Chimera sequences will be removed;
 * The generated files can then be imported into QIIME2 if desired, by setting the `--qiime2import` argument to 'yes'.
 
@@ -198,12 +205,14 @@ Here is the complete list of available arguments for `proname_refine`:
 | Command | Arguments | Description | Mandatory arguments |
 | ------- | --------- | ----------- | ------------------- |
 | proname_refine | --clusterid | The percentage of identity at which clustering should be performed. [Option: decimal between 0 and 1] | Yes |
+|  | --clusteringmethod | The tool used to cluster sequences. It can be either "vsearch" or "mmseqs2". VSEARCH offers high accuracy and is well-suited for small to medium datasets, but can be slower on large datasets. MMseqs2 is slightly less accurate but dramatically faster, especially on large datasets. [Options: "vsearch" or "mmseqs2", Default: "vsearch"] | No |
 |  | --clusterthreads | Number of threads to use for the clustering step. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] | No |
 |  | --inputpath | Path to the folder containing raw fastq files. This must be the same path than the one provided while running proname_import and proname_filter. | Yes |
 |  | --subsampledreads | Number of subsampled reads that will be aligned against the centroid sequence during polishing. [Default: 300] | No |
-|  | --medakabatchsize | Controls memory use. Medaka developers set the default value to 100 but it was reduced to 20 in PRONAME because it is one of the main reasons why medaka may crash due to insufficient available memory. Feel free to increase this value if your working machine has enough memory. [Default: 20] | No |
-|  | --medakathreads | Number of threads to use for the polishing step. The default value has been set to 1 because the lack of memory is one of the main reasons why medaka may crash. Feel free to increase this value if your working machine has enough memory. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 1] | No |
+|  | --medakabatchsize | Controls memory use. The default value has been set to 100. If Medaka shows out of memory errors, the batch size should be reduced. [Default: 100] | No |
+|  | --medakathreads | Number of threads to use for the polishing step. If running Medaka on a CPU, it is recommended to set this value to the maximum number of available threads. PRONAME will automatically split the polishing process into multiple parallel jobs to significantly increase the analysis speed. Each job uses 2 threads for Medaka, with 2 additional threads allocated to each job for parallel overhead. If running on a GPU, this setting has little impact, as the main computation is handled by PyTorch and CUDA. [Default: 4] | No |
 |  | --medakamodel | Basecalling model used to generate raw fastq files. This model will be used by medaka to polish data. The list of available models can be found by running 'medaka tools list\_models' | Yes |
+|  | --chimeramethod | Specify the chimera detection method: "ref" (reference-based) or "denovo" (de novo detection). [Default: "ref"] | No |
 |  | --chimeradb | Path to the reference database to use for the chimera detection. | Yes |
 |  | --qiime2import | Indicate whether the generated representative sequences and table must be imported into QIIME2. [Option: "yes" or "no"] | Yes |
 |  | --deletefiles | Delete all non-essential files, i.e. files generated with proname_filter that are no more needed for the rest of the analysis through PRONAME. [Option: "yes" or "no", Default: no] | No |

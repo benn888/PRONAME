@@ -91,6 +91,8 @@ proname_import \
   --revprimer CGACATCGAGGTGCCAAAC
 ~~~
 
+Please note that `proname_import` will save all outputs in your current working directory. As such, running `proname_import` from the same directory where your raw data is located will result in various errors and wrong sequence counts. Make sure you are not running `proname_import` from the raw data directory.
+
 Here is the complete list of available arguments for `proname_import`:
 
 | Command | Arguments | Description | Mandatory arguments |

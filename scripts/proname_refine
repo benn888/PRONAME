@@ -75,7 +75,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_refine from the PRONAME pipeline, version 2.0.0\n\n"
+    echo -ne "proname_refine from the PRONAME pipeline, version 2.0.1\n\n"
 }
 
 
@@ -432,13 +432,19 @@ parallel --jobs "$medaka_threads" --no-run-if-empty add_header ::: *_seq_count
 
 cut -f1 *_seq_count | sort -u > Global_table
 
+for f in *_seq_count
+do
+   { head -n 1 "$f"; tail -n +2 "$f" | sort; } > "${f}_sorted" && mv "${f}_sorted" "$f"
+done   # to ensure that join works with sorted files
+
 merge_column() {
-    join -t $'\t' -a1 -e 0 -o auto Global_table "$1" > Global_table.tmp && mv Global_table.tmp Global_table
+   join -t $'\t' -a1 -e 0 -o auto Global_table "$1" > Global_table.tmp && mv Global_table.tmp Global_table
 }
 export -f merge_column
 
-for f in *_seq_count; do
-    merge_column "$f"
+for f in *_seq_count
+do
+   merge_column "$f"
 done
 
 

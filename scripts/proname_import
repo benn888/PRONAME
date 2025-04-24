@@ -17,7 +17,10 @@ Help()
    echo -ne "\nSyntax: proname_import [--inputpath|--threads|--duplex|--trimadapters|--sequencingkit|--trimprimers|--fwdprimer|--revprimer|--nocounting|--plotformat|--noscatterplot|--version|--help]"
    echo
    echo "Options:"
-   echo -ne "\t--inputpath\tPath to the folder containing raw fastq files.\n"
+   echo -ne "\t--inputpath\tPath to the folder containing raw fastq files. To prevent file conflicts and ensure accurate sequence counting, \n"
+   echo -ne "\t\t\tyour raw FASTQ files must be stored in a separate directory (e.g., /data/RawData). Do not place them directly in your \n"
+   echo -ne "\t\t\tworking directory, as this is where proname_import writes all its output files. Mixing input and output files in the \n"
+   echo -ne "\t\t\tsame location can lead to errors and unreliable results.\n"
    echo
    echo -ne "\t--threads\tNumber of threads to use for the Guppy adapter-trimming step and/or the Cutadapt primmer-trimming step. \n"
    echo -ne "\t\t\tYou can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2]\n"
@@ -73,7 +76,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_import from the PRONAME pipeline, version 2.0.0\n\n"
+    echo -ne "proname_import from the PRONAME pipeline, version 2.0.1\n\n"
 }
 
 # Variable default values
@@ -285,8 +288,8 @@ then
 
       echo -ne "Sample_name\tSimplex_reads\tDuplex_reads\n$(\
       parallel -j ${num_threads} '
-         simplex_count=$(grep -F -f simplex_read_ids.txt Rawseqids/rawseqids_{} | grep -v ";" | wc -l)
-         duplex_count=$(grep -F -f duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
+         simplex_count=$(rg -Ff simplex_read_ids.txt Rawseqids/rawseqids_{} | grep -v ";" | wc -l)
+         duplex_count=$(rg -Ff duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
          echo -e "{}\t${simplex_count}\t${duplex_count}"
       ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > simplex_duplex_read_distribution.tsv
 
@@ -320,7 +323,7 @@ then
         
       echo -ne "Sample_name\tSimplex_reads\n$(\
       parallel -j ${num_threads} '
-         simplex_count=$(grep -F -f simplex_read_ids.txt Rawseqids/rawseqids_{} | grep -v ";" | wc -l)
+         simplex_count=$(rg -Ff simplex_read_ids.txt Rawseqids/rawseqids_{} | grep -v ";" | wc -l)
          echo -e "{}\t${simplex_count}"
       ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > simplex_read_distribution.tsv
 

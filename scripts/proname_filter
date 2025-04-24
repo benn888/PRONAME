@@ -26,6 +26,9 @@ Help()
    echo -ne "\t--filtminqual\tReads with a quality score below this threshold will be discarded during quality filtering. [Option: integer]\n"
    echo
    echo -ne "\t--inputpath\tPath to the folder containing raw fastq files. This must be the same path than the one provided while running proname_import.\n"
+   echo -ne "\t\t\tTo prevent file conflicts and ensure accurate sequence counting, your raw FASTQ files must be stored in a separate directory (e.g., /data/RawData). \n"
+   echo -ne "\t\t\tDo not place them directly in your working directory, as this is where proname_import writes all its output files. \n"
+   echo -ne "\t\t\tMixing input and output files in the same location can lead to errors and unreliable results.\n"
    echo
    echo -ne "\t--threads\tNumber of threads to use. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2]\n"
    echo
@@ -65,7 +68,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_filter from the PRONAME pipeline, version 2.0.0\n\n"
+    echo -ne "proname_filter from the PRONAME pipeline, version 2.0.1\n\n"
 }
 
 # Variable default values
@@ -211,7 +214,7 @@ then
 
       echo -ne "Sample_name\tHQ_duplex_reads\n$(\
       parallel -j ${num_threads} '
-         hq_duplex_count=$(grep -F -f HQ_duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
+         hq_duplex_count=$(rg -Ff HQ_duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
          echo -e "{}\t${hq_duplex_count}"
       ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > HQ_duplex_read_distribution.tsv
 
@@ -302,7 +305,7 @@ then
 
       echo -ne "Sample_name\tHQ_simplex_reads\n$(\
       parallel -j ${num_threads} '
-         hq_simplex_count=$(grep -F -f HQ_simplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
+         hq_simplex_count=$(rg -Ff HQ_simplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
          echo -e "{}\t${hq_simplex_count}"
       ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > HQ_simplex_read_distribution.tsv
 
@@ -399,8 +402,8 @@ then
 
       echo -ne "Sample_name\tHQ_simplex_reads\tHQ_duplex_reads\n$(\
       parallel -j ${num_threads} '
-         hq_simplex_count=$(grep -F -f HQ_simplex_read_ids.txt Rawseqids/rawseqids_{} | grep -v ";" | wc -l)
-         hq_duplex_count=$(grep -F -f HQ_duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
+         hq_simplex_count=$(rg -Ff HQ_simplex_read_ids.txt Rawseqids/rawseqids_{} | grep -v ";" | wc -l)
+         hq_duplex_count=$(rg -Ff HQ_duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
          echo -e "{}\t${hq_simplex_count}\t${hq_duplex_count}"
       ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > HQ_simplex_duplex_read_distribution.tsv
 

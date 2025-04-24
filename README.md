@@ -28,11 +28,11 @@ To download an image, please run one of the following commands:
 
 - **Command to pull image for amd64 architecture:**  
   ```bash
-   docker pull benn888/proname:v2.0.0-amd64
+   docker pull benn888/proname:v2.0.1-amd64
 
 - **Command to pull image for arm64 architecture:**  
   ```bash
-   docker pull benn888/proname:v2.0.0-arm64
+   docker pull benn888/proname:v2.0.1-arm64
 Note that, depending on your installation, running Docker commands may require `sudo` privileges.
 
 You can run this command to confirm that the image has successfully been downloaded and is available:
@@ -44,14 +44,14 @@ docker images
 Then, the simplest way to run a new container is to use this command:
 
 ~~~
-docker run -it --name proname_container benn888/proname:v2.0.0-<arch>
+docker run -it --name proname_container benn888/proname:v2.0.1-<arch>
 ~~~
 Where `<arch>` should be replaced by `amd64` or `arm64`.
 
 However, a more effective way to launch a container is to set up a shared volume that mounts a host directory directly in the container. This setup allows access to raw sequencing data in the container and enables direct access to PRONAME results from the host machine:
 
 ~~~
-docker run -it --name proname_container -v /path/to/host/data:/data benn888/proname:v2.0.0-<arch>
+docker run -it --name proname_container -v /path/to/host/data:/data benn888/proname:v2.0.1-<arch>
 ~~~
 where `/path/to/host/data` is the path to the directory on your host machine containing the raw sequencing data, and `/data` is the directory in the container where this data will be accessible. Place any files resulting from the PRONAME analysis in `/data` to access them directly from the host machine.
 
@@ -95,7 +95,7 @@ Here is the complete list of available arguments for `proname_import`:
 
 | Command | Arguments | Description | Mandatory arguments |
 | ------- | --------- | ----------- | ------------------- |
-| proname_import | --inputpath | Path to the folder containing raw fastq files. | Yes |
+| proname_import | --inputpath | Path to the folder containing raw fastq files. To prevent file conflicts and ensure accurate sequence counting, your raw FASTQ files must be stored in a separate directory (e.g., /data/RawData). Do not place them directly in your working directory, as this is where proname_import writes all its output files. Mixing input and output files in the same location can lead to errors and unreliable results. | Yes |
 |  | --threads | Number of threads to use for the Guppy adapter-trimming step and/or the Cutadapt primmer-trimming step. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] | No |
 |  | --duplex | Indicate whether your sequencing data include duplex reads or not. Duplex reads are high-quality reads that were introduced with the kit 14 chemistry. [Option: "yes" or "no"] | Yes |
 |  | --trimadapters | Indicate whether your sequencing data contain adapters that should be trimmed. [Option: "yes" or "no"] | Yes |
@@ -151,7 +151,7 @@ Here is the complete list of available arguments for `proname_filter`:
 |  | --filtmaxlen | Reads with a length above this threshold will be discarded during quality filtering. [Option: integer] | Yes |
 |  | --filtminqual | Reads with a quality score below this threshold will be discarded during quality filtering. [Option: integer] | Yes |
 |  | --threads | Number of threads to use. You can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2] | No |
-|  | --inputpath | Path to the folder containing raw fastq files. This must be the same path than the one provided while running proname_import. | Yes |
+|  | --inputpath | Path to the folder containing raw fastq files. This must be the same path than the one provided while running proname_import. To prevent file conflicts and ensure accurate sequence counting, your raw FASTQ files must be stored in a separate directory (e.g., /data/RawData). Do not place them directly in your working directory, as this is where proname_import writes all its output files. Mixing input and output files in the same location can lead to errors and unreliable results. | Yes |
 |  | --deletefiles | Delete all non-essential files, i.e. files generated with proname_import that are no more needed for the rest of the analysis through PRONAME. [Option: "yes" or "no", Default: no] | No |
 |  | --nocounting | When this argument is set to "yes", counting of HQ simplex/duplex reads is not performed. [Options: "yes" or "no", Default: "no"] | No |
 |  | --plotformat | Format of the scatterplot visualization file produced. It can be either "png" or "html". Since NanoPlot produces an empty png plot for an unknown reason, it is only used to generate html visualizations. png plots are produced using the custom script scaleq.py. [Default: "png"] | No |

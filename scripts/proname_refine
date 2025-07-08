@@ -14,7 +14,7 @@ Help()
 ## Display Help
    echo -ne "\nThe proname_refine script is the third part of the PRONAME pipeline. This script carries out the clustering of high-quality sequence data coming from proname_filter, \nand the subsequent polishing with a tool dedicated to Nanopore data (i.e. medaka). Optionally, the script can import the generated files into QIIME2 for further processing."
    echo
-   echo -ne "\nSyntax: proname_refine [--clusteringmethod|--clusterid|--clusterthreads|--inputpath|--subsampledreads|--medakabatchsize|--medakathreads|--medakamodel|--chimeramethod|--chimeradb|--qiime2import|--version|--help]"
+   echo -ne "\nSyntax: proname_refine [--clusteringmethod|--clusterid|--clusterthreads|--inputpath|--subsampledreads|--medakabatchsize|--medakathreads|--medakamodel|--chimeramethod|--chimeradb|--qiime2import|--version|--verbose|--help]"
    echo
    echo "Options:"
    echo -ne "\t--clusteringmethod\tThe tool used to cluster sequences. It can be either \"vsearch\" or \"mmseqs2\". VSEARCH offers \n"
@@ -56,6 +56,8 @@ Help()
    echo
    echo -ne "\t--version\t\tPrint the version of the pipeline.\n"
    echo
+   echo -ne "\t--verbose\tActivate verbose/debug mode (no redirections).\n"
+   echo
    echo -ne "\t--help\t\t\tPrint this help."
    echo
 
@@ -75,7 +77,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_refine from the PRONAME pipeline, version 2.0.1\n\n"
+    echo -ne "proname_refine from the PRONAME pipeline, version 2.1.0\n\n"
 }
 
 
@@ -87,6 +89,7 @@ medaka_threads="4"
 delete_non_essential="no"
 clustering_method="vsearch"
 chimera_method="ref"
+verbose=false
 
 
 # Transform long options to short ones
@@ -108,6 +111,7 @@ for arg in "$@"; do
     '--clusteringmethod')   set -- "$@" '-k'   ;;
     '--chimeramethod')      set -- "$@" '-l'   ;;
     '--deletefiles')        set -- "$@" '-r'   ;;
+    '--verbose')            verbose=true ;;
     *)                      set -- "$@" "$arg" ;;
   esac
 done
@@ -172,6 +176,16 @@ then
    exit 1
 fi
 
+
+# Define exec_cmd function for conditional verbosity
+exec_cmd() {
+  if $verbose; then
+    eval "$@"
+  else
+    eval "$@" >/dev/null 2>&1
+  fi
+}
+
 ######################################################
 
 # Listing the sequence identifiers present in each fastq file
@@ -232,7 +246,7 @@ then
      --threads ${clustering_threads} \
      --clusters vsearch_clusters/cluster
 
-   remove_singletons.py vsearch_clusters > /dev/null 2>&1
+   exec_cmd "remove_singletons.py vsearch_clusters"
 
 
    # Recording clustered reads according to their sample provenance
@@ -296,7 +310,7 @@ then
 
    # Removing singletons
 
-   remove_singletons.py mmseqs2_clusters > /dev/null 2>&1
+   exec_cmd "remove_singletons.py mmseqs2_clusters"
 
    # Recording clustered reads according to their sample provenance
 
@@ -321,6 +335,12 @@ echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mSubsampling reads i
 for i in $(ls ${clustering_method}_clusters | grep "centroid" | cut -d '_' -f 2 | cut -d '.' -f 1)
 do
    seqkit shuffle -s 23 ${clustering_method}_clusters/$i 2>/dev/null | seqkit head -n ${n_subsampled_reads} -w 0 -o ${clustering_method}_clusters/subreads_${i}.fasta
+done
+
+# Adding medaka model in sequence headers
+for fasta in ${clustering_method}_clusters/{subreads_cluster*.fasta,centroid_*.fasta}
+do
+   sed -i "s/^>\(.*\)/>\1\tmv:${medaka_model}/" "$fasta"
 done
 
 if find ${clustering_method}_clusters -name 'subreads*' | grep -q . 1> /dev/null 2>&1
@@ -354,9 +374,10 @@ medaka_polishing() {
    echo "Launching polishing in parallel using ${PARALLEL_JOBS} jobs (4 threads per job)."
 
    # Generating cluster IDs
-   local CLUSTER_IDS=$(find ${clustering_method}_clusters -type f -name "subreads_cluster*.fasta" | xargs -n1 basename | cut -d '_' -f 2 | cut -d '.' -f 1)
+   find ${clustering_method}_clusters -type f -name "subreads_cluster*.fasta" | \
+      xargs -n1 basename | cut -d '_' -f 2 | cut -d '.' -f 1 > cluster_ids.txt
 
-   if [ -z "${CLUSTER_IDS}" ]
+   if [ ! -s cluster_ids.txt ]
    then
       echo "Error: No clusters found!"
       exit 1
@@ -382,8 +403,9 @@ medaka_polishing() {
    }
    export -f polish_cluster
 
-   parallel -j "${PARALLEL_JOBS}" polish_cluster ::: ${CLUSTER_IDS}
+   parallel -j "${PARALLEL_JOBS}" polish_cluster :::: cluster_ids.txt
 
+   rm cluster_ids.txt
 }
 
 # Calling polishing function
@@ -405,12 +427,13 @@ fi
 export clustering_method
 export medaka_threads
 
-find "${clustering_method}_clusters" -type f -name "consensus.fasta" -path "*medaka_*" | \
+find "${clustering_method}_clusters" -type f -name "consensus.fasta" -path "*medaka_*" > consensus_paths.txt
 parallel --jobs "$medaka_threads" --no-run-if-empty '
     i=$(basename $(dirname {}) | cut -d "_" -f 2)
     rep_seq=$(grep ">" {} | cut -d ">" -f 2)
     printf "%s\t%s\n" "$i" "$rep_seq"
-' > clusters_seqids_linking_table
+' :::: consensus_paths.txt > clusters_seqids_linking_table
+rm consensus_paths.txt
 
 
 # Creating the feature table
@@ -425,20 +448,22 @@ add_header() {
 }
 export -f add_header
 
-parallel --jobs "$medaka_threads" --no-run-if-empty add_header ::: *_seq_count
+find . -maxdepth 1 -type f -name "*_seq_count" > seq_count_files.txt
+parallel --jobs "$medaka_threads" --no-run-if-empty add_header :::: seq_count_files.txt
+rm seq_count_files.txt
 
 
 ## Merging all seq_count files
 
-cut -f1 *_seq_count | sort -u > Global_table
+find . -maxdepth 1 -type f -name "*_seq_count" -exec cut -f1 {} \; | LC_ALL=C sort -u > Global_table
 
 for f in *_seq_count
 do
-   { head -n 1 "$f"; tail -n +2 "$f" | sort; } > "${f}_sorted" && mv "${f}_sorted" "$f"
+   { head -n 1 "$f"; tail -n +2 "$f" | LC_ALL=C sort; } > "${f}_sorted" && mv "${f}_sorted" "$f"
 done   # to ensure that join works with sorted files
 
 merge_column() {
-   join -t $'\t' -a1 -e 0 -o auto Global_table "$1" > Global_table.tmp && mv Global_table.tmp Global_table
+   LC_ALL=C join -t $'\t' -a1 -e 0 -o auto Global_table "$1" > Global_table.tmp && mv Global_table.tmp Global_table
 }
 export -f merge_column
 
@@ -513,11 +538,10 @@ echo -ne "$(head -n 1 Global_table)\n$(grep -f <(grep ">" rep_seqs.fasta | cut -
 
 # Clean-up
 
-rm *_seq_count
+find . -maxdepth 1 -type f -name "*_seq_count" -exec rm {} +
 rm clusters_seqids_linking_table
 rm Global_table
 rm medaka_consensus_seqs.fasta
-rm -r ${clustering_method}_clusters
 
 if [ ${qiime2_import} = "yes" ]
 then
@@ -530,18 +554,18 @@ then
 
       biom convert -i rep_table.tsv -o rep_table.biom --table-type "OTU table" --to-hdf5
 
-      qiime tools import \
+      exec_cmd "qiime tools import \
         --input-path rep_table.biom \
         --type 'FeatureTable[Frequency]' \
         --input-format BIOMV210Format \
-        --output-path rep_table.qza > /dev/null 2>/dev/null
+        --output-path rep_table.qza"
 
       rm rep_table.biom
 
-      qiime tools import \
+      exec_cmd "qiime tools import \
         --type FeatureData[Sequence] \
         --input-path rep_seqs.fasta \
-        --output-path rep_seqs.qza > /dev/null 2>/dev/null
+        --output-path rep_seqs.qza"
 
       echo -ne "sample-id\tsample-name\n#q2:types\tcategorical\n$(paste <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}') <(ls ${fastq_folder} | awk -F '.fastq' '{print $1}'))\n" > sample_metadata.tsv
 
@@ -635,6 +659,7 @@ then
     rm *read_distribution.tsv
     rm LengthvsQualityScatterPlot*
     rm -r HQ
+    rm -r ${clustering_method}_clusters
 fi
 
 
@@ -652,4 +677,4 @@ unset qiime2_import
 unset delete_non_essential
 unset chimera_method
 unset ARCH
-
+unset verbose

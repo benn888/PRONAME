@@ -14,7 +14,7 @@ Help()
 ## Display Help
    echo -ne "\nThe proname_import script is the first part of the PRONAME pipeline and allows importing Nanopore metabarcoding data into the pipeline and initial processing. \nIt includes the trimming of adapter and primer sequences if asked by the user, the counting of simplex reads and duplex reads (if applicable), \nand the creation of Length vs Quality scatter plots."
    echo
-   echo -ne "\nSyntax: proname_import [--inputpath|--threads|--duplex|--trimadapters|--sequencingkit|--trimprimers|--fwdprimer|--revprimer|--nocounting|--plotformat|--noscatterplot|--version|--help]"
+   echo -ne "\nSyntax: proname_import [--inputpath|--threads|--duplex|--trimadapters|--sequencingkit|--trimprimers|--fwdprimer|--revprimer|--nocounting|--plotformat|--noscatterplot|--version|--verbose|--help]"
    echo
    echo "Options:"
    echo -ne "\t--inputpath\tPath to the folder containing raw fastq files. To prevent file conflicts and ensure accurate sequence counting, \n"
@@ -56,6 +56,8 @@ Help()
    echo
    echo -ne "\t--version\tPrint the version of the pipeline.\n"
    echo
+   echo -ne "\t--verbose\tActivate verbose/debug mode (no redirections).\n"
+   echo
    echo -ne "\t--help\t\tPrint this help."
    echo
 
@@ -76,7 +78,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_import from the PRONAME pipeline, version 2.0.1\n\n"
+    echo -ne "proname_import from the PRONAME pipeline, version 2.1.0\n\n"
 }
 
 # Variable default values
@@ -85,6 +87,7 @@ no_scatterplot="no"
 no_counting="no"
 sequencing_kit="SQK-LSK114"
 plot_format="png"
+verbose=false
 
 # Transform long options to short ones
 
@@ -104,6 +107,7 @@ for arg in "$@"; do
     '--nocounting')      set -- "$@" '-j'   ;;
     '--sequencingkit')   set -- "$@" '-k'   ;;
     '--plotformat')      set -- "$@" '-l'   ;;
+    '--verbose')         verbose=true ;;
     *)                   set -- "$@" "$arg" ;;
   esac
 done
@@ -151,6 +155,16 @@ then
    echo -ne "Please consult the help menu with 'proname_import --help'\n"
    exit 1
 fi
+
+
+# Define exec_cmd function for conditional verbosity
+exec_cmd() {
+  if $verbose; then
+    eval "$@"
+  else
+    eval "$@" >/dev/null 2>&1
+  fi
+}
 
 ######################################################
 
@@ -238,23 +252,23 @@ then
 
    # Trimming primer sequences from reads
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mTrimming primers from reads...\033[0m\n"
-   cutadapt \
+   exec_cmd "cutadapt \
       reads_simplex_duplex.fastq \
       -g ${fwd_primer} \
       -a ${RC_rev_primer} \
       -e 0 \
       -n 2 \
       -j ${num_threads} \
-      -o cutadapt_output_tmp.fastq > /dev/null 2>/dev/null \
-   && cutadapt \
+      -o cutadapt_output_tmp.fastq"
+   exec_cmd "cutadapt \
       cutadapt_output_tmp.fastq \
       -g ${rev_primer} \
       -a ${RC_fwd_primer} \
       -e 0 \
       -n 2 \
       -j ${num_threads} \
-      -o cutadapt_output.fastq >/dev/null 2>/dev/null \
-   && rm cutadapt_output_tmp.fastq
+      -o cutadapt_output.fastq"
+   exec_cmd "rm cutadapt_output_tmp.fastq"
    
    if [ -e "cutadapt_output.fastq" ]
    then
@@ -283,18 +297,19 @@ then
       # Counting duplex and simplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of duplex and simplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n reads_simplex.fastq > simplex_read_ids.txt
-      seqkit seq -n reads_duplex.fastq > duplex_read_ids.txt
+      seqkit seq -n reads_simplex.fastq | sed 's/ .*//' | sort > simplex_read_ids_sorted.txt
+      seqkit seq -n reads_duplex.fastq | sed 's/ .*//' | sort > duplex_read_ids_sorted.txt
 
-      echo -ne "Sample_name\tSimplex_reads\tDuplex_reads\n$(\
+      echo -e "Sample_name\tSimplex_reads\tDuplex_reads" > simplex_duplex_read_distribution.tsv
+
       parallel -j ${num_threads} '
-         simplex_count=$(rg -Ff simplex_read_ids.txt Rawseqids/rawseqids_{} | grep -v ";" | wc -l)
-         duplex_count=$(rg -Ff duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
+         simplex_count=$(sort Rawseqids/rawseqids_{} | comm -12 - simplex_read_ids_sorted.txt | grep -v ";" | wc -l)
+         duplex_count=$(sort Rawseqids/rawseqids_{} | comm -12 - duplex_read_ids_sorted.txt | wc -l)
          echo -e "{}\t${simplex_count}\t${duplex_count}"
-      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > simplex_duplex_read_distribution.tsv
+      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//') >> simplex_duplex_read_distribution.tsv
 
-      rm simplex_read_ids.txt
-      rm duplex_read_ids.txt
+      rm simplex_read_ids_sorted.txt
+      rm duplex_read_ids_sorted.txt
 
       nduplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' reads_duplex.fastq | wc -l)
       nsimplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' reads_simplex.fastq | wc -l)
@@ -319,15 +334,15 @@ then
       # Counting simplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of simplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n reads_simplex.fastq > simplex_read_ids.txt
-        
-      echo -ne "Sample_name\tSimplex_reads\n$(\
-      parallel -j ${num_threads} '
-         simplex_count=$(rg -Ff simplex_read_ids.txt Rawseqids/rawseqids_{} | grep -v ";" | wc -l)
-         echo -e "{}\t${simplex_count}"
-      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > simplex_read_distribution.tsv
+      seqkit seq -n reads_simplex.fastq | sed 's/ .*//' | sort > simplex_read_ids_sorted.txt
 
-      rm simplex_read_ids.txt
+      echo -e "Sample_name\tSimplex_reads" > simplex_read_distribution.tsv
+
+      parallel -j ${num_threads} '
+         sort Rawseqids/rawseqids_{} | comm -12 - simplex_read_ids_sorted.txt | grep -v ";" | wc -l | awk -v sample={} "{print sample\"\t\"\$1}"
+      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//') >> simplex_read_distribution.tsv
+
+      rm simplex_read_ids_sorted.txt
 
       nsimplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' reads_simplex.fastq | wc -l)
         
@@ -458,3 +473,4 @@ unset no_scatterplot
 unset no_counting
 unset sequencing_kit
 unset plot_format
+unset verbose

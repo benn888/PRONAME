@@ -68,7 +68,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_filter from the PRONAME pipeline, version 2.0.1\n\n"
+    echo -ne "proname_filter from the PRONAME pipeline, version 2.1.0\n\n"
 }
 
 # Variable default values
@@ -210,15 +210,16 @@ then
       # Counting duplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality duplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n HQ/HQ_duplex_seqs.fastq > HQ_duplex_read_ids.txt
+      seqkit seq -n HQ/HQ_duplex_seqs.fastq | sed 's/ .*//' | sort > HQ_duplex_read_ids_sorted.txt
 
-      echo -ne "Sample_name\tHQ_duplex_reads\n$(\
+      echo -e "Sample_name\tHQ_duplex_reads" > HQ_duplex_read_distribution.tsv
+
       parallel -j ${num_threads} '
-         hq_duplex_count=$(rg -Ff HQ_duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
-         echo -e "{}\t${hq_duplex_count}"
-      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > HQ_duplex_read_distribution.tsv
+         sort Rawseqids/rawseqids_{} | comm -12 - HQ_duplex_read_ids_sorted.txt | wc -l | \
+         awk -v sample={} "{print sample\"\t\"\$1}"
+      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//') >> HQ_duplex_read_distribution.tsv
 
-      rm HQ_duplex_read_ids.txt
+      rm HQ_duplex_read_ids_sorted.txt
 
       nhqduplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_duplex_seqs.fastq | wc -l)
 
@@ -301,15 +302,16 @@ then
       # Counting simplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality simplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n HQ/HQ_simplex_seqs.fastq > HQ_simplex_read_ids.txt
+      seqkit seq -n HQ/HQ_simplex_seqs.fastq | sed 's/ .*//' | sort > HQ_simplex_read_ids_sorted.txt
 
-      echo -ne "Sample_name\tHQ_simplex_reads\n$(\
+      echo -e "Sample_name\tHQ_simplex_reads" > HQ_simplex_read_distribution.tsv
+
       parallel -j ${num_threads} '
-         hq_simplex_count=$(rg -Ff HQ_simplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
-         echo -e "{}\t${hq_simplex_count}"
-      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > HQ_simplex_read_distribution.tsv
+         sort Rawseqids/rawseqids_{} | comm -12 - HQ_simplex_read_ids_sorted.txt | grep -v ";" | wc -l | \
+         awk -v sample={} "{print sample\"\t\"\$1}"
+      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//') >> HQ_simplex_read_distribution.tsv
 
-      rm HQ_simplex_read_ids.txt
+      rm HQ_simplex_read_ids_sorted.txt
 
       nhqsimplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | wc -l)
 
@@ -397,18 +399,19 @@ then
       # Counting duplex and simplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality duplex and simplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n HQ/HQ_simplex_seqs.fastq > HQ_simplex_read_ids.txt
-      seqkit seq -n HQ/HQ_duplex_seqs.fastq > HQ_duplex_read_ids.txt
+      seqkit seq -n HQ/HQ_simplex_seqs.fastq | sed 's/ .*//' | sort > HQ_simplex_read_ids_sorted.txt
+      seqkit seq -n HQ/HQ_duplex_seqs.fastq | sed 's/ .*//' | sort > HQ_duplex_read_ids_sorted.txt
 
-      echo -ne "Sample_name\tHQ_simplex_reads\tHQ_duplex_reads\n$(\
+      echo -e "Sample_name\tHQ_simplex_reads\tHQ_duplex_reads" > HQ_simplex_duplex_read_distribution.tsv
+
       parallel -j ${num_threads} '
-         hq_simplex_count=$(rg -Ff HQ_simplex_read_ids.txt Rawseqids/rawseqids_{} | grep -v ";" | wc -l)
-         hq_duplex_count=$(rg -Ff HQ_duplex_read_ids.txt Rawseqids/rawseqids_{} | wc -l)
-         echo -e "{}\t${hq_simplex_count}\t${hq_duplex_count}"
-      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//'))\n" > HQ_simplex_duplex_read_distribution.tsv
+         simplex_count=$(sort Rawseqids/rawseqids_{} | comm -12 - HQ_simplex_read_ids_sorted.txt | grep -v ";" | wc -l)
+         duplex_count=$(sort Rawseqids/rawseqids_{} | comm -12 - HQ_duplex_read_ids_sorted.txt | wc -l)
+         echo -e "{}\t${simplex_count}\t${duplex_count}"
+      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//') >> HQ_simplex_duplex_read_distribution.tsv
 
-      rm HQ_simplex_read_ids.txt
-      rm HQ_duplex_read_ids.txt
+      rm HQ_simplex_read_ids_sorted.txt
+      rm HQ_duplex_read_ids_sorted.txt
 
       nhqsimplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_simplex_seqs.fastq | wc -l)
       nhqduplex=$(awk 'NR == 1 || (NR-1) % 4 == 0' HQ/HQ_duplex_seqs.fastq | wc -l)

@@ -14,7 +14,7 @@ Help()
 ## Display Help
    echo -ne "\nThe proname_taxonomy script is the fourth and last part of the PRONAME pipeline. This script carries out the taxonomic analysis of \nHQ consensus sequences coming from the proname_refine script. QIIME2-formatted taxonomy and barplot files are generated if the QIIME2 \noption was selected at the previous step (proname_refine). If not, the taxonomic analysis provides a taxonomy TSV file that can be used \nfor any other application outside of QIIME2. A phyloseq object can also be generated for further analyses using R."
    echo
-   echo -ne "\nSyntax: proname_taxonomy [--qseqs|--qtable|--db|--reftax|--evalue|--percid|--qcover|--threads|--metadata|--assay|--phyloseq|--version|--help]"
+   echo -ne "\nSyntax: proname_taxonomy [--qseqs|--qtable|--db|--reftax|--evalue|--percid|--qcover|--threads|--metadata|--assay|--phyloseq|--version|--verbose|--help]"
    echo
    echo "Options:"
    echo -ne "\t--qseqs\t\tPath to query sequences. It should be either 'rep_seqs.qza' (if data was imported into QIIME2 at the \n"
@@ -54,6 +54,8 @@ Help()
    echo
    echo -ne "\t--version\tPrint the version of the pipeline.\n"
    echo
+   echo -ne "\t--verbose\tActivate verbose/debug mode (no redirections).\n"
+   echo
    echo -ne "\t--help\t\tPrint this help."
    echo
 
@@ -75,7 +77,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_taxonomy from the PRONAME pipeline, version 2.0.1\n\n"
+    echo -ne "proname_taxonomy from the PRONAME pipeline, version 2.1.0\n\n"
 }
 
 evalue="0.001"
@@ -83,6 +85,7 @@ perc_identity="80"
 query_cover="80"
 num_threads="2"
 generate_phyloseq="no"
+verbose=false
 
 # Transform long options to short ones
 
@@ -102,6 +105,7 @@ for arg in "$@"; do
     '--metadata') set -- "$@" '-j'   ;;
     '--assay')    set -- "$@" '-k'   ;;
     '--phyloseq') set -- "$@" '-p'   ;;
+    '--verbose')  verbose=true ;;
     *)            set -- "$@" "$arg" ;;
   esac
 done
@@ -144,6 +148,16 @@ if [ ! "$query_seqs" ] || [ ! "$db" ] || [ ! "$ref_taxonomy" ] || [ ! "$assay_na
 fi
 
 
+# Define exec_cmd function for conditional verbosity
+exec_cmd() {
+  if $verbose; then
+    eval "$@"
+  else
+    eval "$@" >/dev/null 2>&1
+  fi
+}
+
+
 ###########################################
 
 
@@ -163,9 +177,9 @@ then
 
    if [[ "$ARCH" == "x86_64" ]]
    then
-      qiime tools export \
+      exec_cmd "qiime tools export \
         --input-path ${query_seqs} \
-        --output-path . >/dev/null 2>/dev/null
+        --output-path ."
    elif [[ "$ARCH" == "aarch64" ]]
    then
       echo -ne "\033[1;33mARM64 users: Be aware that, for practical reasons, 'rep_seqs.fasta' is used for the taxonomic analysis, even if you supplied 'rep_seqs.qza' via the --qseqs argument.\033[0m \n"
@@ -230,9 +244,9 @@ then
       sed 's/;//g' rep_seqs.fasta > rep_seqs_for_nwk.fasta
       awk 'NR==1 {print} NR>1 {gsub(/;/, ""); print}' rep_table.tsv > rep_table_for_nwk.tsv
 
-      mafft --auto rep_seqs_for_nwk.fasta > aligned_seqs.fasta 2>/dev/null
-      fasttree -nt aligned_seqs.fasta > phy_tree.nwk 2>/dev/null
-      Rscript /opt/scripts/generate_phyloseq.R rep_table_for_nwk.tsv taxonomy_${assay_name}_blastn_for_nwk.tsv rep_seqs_for_nwk.fasta phy_tree.nwk >/dev/null 2>/dev/null
+      exec_cmd "mafft --auto rep_seqs_for_nwk.fasta > aligned_seqs.fasta"
+      exec_cmd "fasttree -nt aligned_seqs.fasta > phy_tree.nwk"
+      exec_cmd "Rscript /opt/scripts/generate_phyloseq.R rep_table_for_nwk.tsv taxonomy_${assay_name}_blastn_for_nwk.tsv rep_seqs_for_nwk.fasta phy_tree.nwk"
       rm phy_tree.nwk
       rm aligned_seqs.fasta
       rm *for_nwk*
@@ -252,11 +266,11 @@ then
 
    if [[ "$ARCH" == "x86_64" ]]
    then
-      qiime tools import \
+      exec_cmd "qiime tools import \
         --type 'FeatureData[Taxonomy]' \
         --input-format HeaderlessTSVTaxonomyFormat \
         --input-path taxonomy_${assay_name}_blastn.tsv \
-        --output-path taxonomy_blastn.qza >/dev/null 2>/dev/null
+        --output-path taxonomy_blastn.qza"
 
       if [ -e "taxonomy_blastn.qza" ]
       then
@@ -268,11 +282,11 @@ then
          exit;
       fi
 
-      qiime taxa barplot \
+      exec_cmd "qiime taxa barplot \
         --i-table ${query_table} \
         --i-taxonomy taxonomy_blastn.qza \
         --m-metadata-file ${metadata} \
-        --o-visualization taxa_barplot_${assay_name}_blastn.qzv >/dev/null 2>/dev/null
+        --o-visualization taxa_barplot_${assay_name}_blastn.qzv"
 
       if [ -e "taxa_barplot_${assay_name}_blastn.qzv" ]
       then
@@ -377,9 +391,9 @@ else
       sed 's/;//g' rep_seqs.fasta > rep_seqs_for_nwk.fasta
       awk 'NR==1 {print} NR>1 {gsub(/;/, ""); print}' rep_table.tsv > rep_table_for_nwk.tsv
 
-      mafft --auto rep_seqs_for_nwk.fasta > aligned_seqs.fasta 2>/dev/null
-      fasttree -nt aligned_seqs.fasta > phy_tree.nwk 2>/dev/null
-      Rscript /opt/scripts/generate_phyloseq.R rep_table_for_nwk.tsv taxonomy_${assay_name}_blastn_for_nwk.tsv rep_seqs_for_nwk.fasta phy_tree.nwk >/dev/null 2>/dev/null
+      exec_cmd "mafft --auto rep_seqs_for_nwk.fasta > aligned_seqs.fasta"
+      exec_cmd "fasttree -nt aligned_seqs.fasta > phy_tree.nwk"
+      exec_cmd "Rscript /opt/scripts/generate_phyloseq.R rep_table_for_nwk.tsv taxonomy_${assay_name}_blastn_for_nwk.tsv rep_seqs_for_nwk.fasta phy_tree.nwk"
       rm phy_tree.nwk
       rm aligned_seqs.fasta
       rm *for_nwk*
@@ -416,5 +430,5 @@ unset metadata
 unset assay_name
 unset generate_phyloseq
 unset ARCH
-
+unset verbose
 

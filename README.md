@@ -28,11 +28,11 @@ To download an image, please run one of the following commands:
 
 - **Command to pull image for amd64 architecture:**  
   ```bash
-   docker pull benn888/proname:v2.0.1-amd64
+   docker pull benn888/proname:v2.1.0-amd64
 
 - **Command to pull image for arm64 architecture:**  
   ```bash
-   docker pull benn888/proname:v2.0.1-arm64
+   docker pull benn888/proname:v2.1.0-arm64
 Note that, depending on your installation, running Docker commands may require `sudo` privileges.
 
 You can run this command to confirm that the image has successfully been downloaded and is available:
@@ -44,14 +44,14 @@ docker images
 Then, the simplest way to run a new container is to use this command:
 
 ~~~
-docker run -it --name proname_container benn888/proname:v2.0.1-<arch>
+docker run -it --name proname_container benn888/proname:v2.1.0-<arch>
 ~~~
 Where `<arch>` should be replaced by `amd64` or `arm64`.
 
 However, a more effective way to launch a container is to set up a shared volume that mounts a host directory directly in the container. This setup allows access to raw sequencing data in the container and enables direct access to PRONAME results from the host machine:
 
 ~~~
-docker run -it --name proname_container -v /path/to/host/data:/data benn888/proname:v2.0.1-<arch>
+docker run -it --name proname_container -v /path/to/host/data:/data benn888/proname:v2.1.0-<arch>
 ~~~
 where `/path/to/host/data` is the path to the directory on your host machine containing the raw sequencing data, and `/data` is the directory in the container where this data will be accessible. Place any files resulting from the PRONAME analysis in `/data` to access them directly from the host machine.
 
@@ -107,6 +107,7 @@ Here is the complete list of available arguments for `proname_import`:
 |  | --plotformat | Format of the scatterplot visualization files produced. It can be either "png" or "html". Since NanoPlot produces empty png plots for an unknown reason, it is only used to generate html visualizations. png plots are produced using the custom script scaleq.py. [Default: "png"] | No |
 |  | --noscatterplot | When this argument is set to 'yes', no length vs. quality scatterplot is generated. Since this is a time-consuming step, this possiblity has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip this scatterplot generation. Visual inspection of these plots is crucial for deciding which type of read to work with (duplex and/or simplex) and which length and quality thresholds to apply. [Options: "yes" or "no", Default: "no"] | No |
 |  | --version | Print the version of the pipeline. | No |
+|  | --verbose | Activate verbose/debug mode (no redirections). | No |
 |  | --help | Print the help menu. | No |
 
 The analysis of the `simplex_duplex_read_distribution.tsv` generated file shows that enough duplex reads were sequenced: 
@@ -157,6 +158,7 @@ Here is the complete list of available arguments for `proname_filter`:
 |  | --plotformat | Format of the scatterplot visualization file produced. It can be either "png" or "html". Since NanoPlot produces an empty png plot for an unknown reason, it is only used to generate html visualizations. png plots are produced using the custom script scaleq.py. [Default: "png"] | No |
 |  | --noscatterplot | When this argument is set to 'yes', no length vs. quality scatterplot is generated. Since this is a time-consuming step, this possiblity has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip this scatterplot generation. Visual inspection of these plots is crucial for deciding which type of read to work with (duplex and/or simplex) and which length and quality thresholds to apply. [Options: "yes" or "no", Default: "no"] | No |
 |  | --version | Print the version of the pipeline. | No |
+|  | --verbose | Activate verbose/debug mode (no redirections). | No |
 |  | --help | Print the help menu. | No |
 
 The `HQ_duplex_read_distribution.tsv` file indicates how many high-quality duplex reads remained after filtering:
@@ -217,6 +219,7 @@ Here is the complete list of available arguments for `proname_refine`:
 |  | --qiime2import | Indicate whether the generated representative sequences and table must be imported into QIIME2. [Option: "yes" or "no"] | Yes |
 |  | --deletefiles | Delete all non-essential files, i.e. files generated with proname_filter that are no more needed for the rest of the analysis through PRONAME. [Option: "yes" or "no", Default: no] | No |
 |  | --version | Print the version of the pipeline. | No |
+|  | --verbose | Activate verbose/debug mode (no redirections). | No |
 |  | --help | Print the help menu. | No |
 
 ## 4. proname_taxonomy
@@ -249,6 +252,7 @@ Here is the complete list of available arguments for `proname_taxonomy`:
 |  | --assay | Name of your metabarcoding assay, that will appear in the name of taxonomy files produced. | Yes |
 |  | --phyloseq | Specify if a phyloseq object must be generated. [Options: "yes" or "no", Default: "no"] | No |
 |  | --version | Print the version of the pipeline. | No |
+|  | --verbose | Activate verbose/debug mode (no redirections). | No |
 |  | --help | Print the help menu. | No |
 
 The taxa barplot generated can be used to visualize the results of the taxonomic analysis using [QIIME2 View](https://view.qiime2.org/) or the [Dokdo API](https://dokdo.readthedocs.io/en/latest/dokdo_api.html) for instance:

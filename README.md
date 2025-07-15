@@ -28,11 +28,11 @@ To download an image, please run one of the following commands:
 
 - **Command to pull image for amd64 architecture:**  
   ```bash
-   docker pull benn888/proname:v2.1.0-amd64
+   docker pull benn888/proname:v2.1.1-amd64
 
 - **Command to pull image for arm64 architecture:**  
   ```bash
-   docker pull benn888/proname:v2.1.0-arm64
+   docker pull benn888/proname:v2.1.1-arm64
 Note that, depending on your installation, running Docker commands may require `sudo` privileges.
 
 You can run this command to confirm that the image has successfully been downloaded and is available:
@@ -44,14 +44,14 @@ docker images
 Then, the simplest way to run a new container is to use this command:
 
 ~~~
-docker run -it --name proname_container benn888/proname:v2.1.0-<arch>
+docker run -it --name proname_container benn888/proname:v2.1.1-<arch>
 ~~~
 Where `<arch>` should be replaced by `amd64` or `arm64`.
 
 However, a more effective way to launch a container is to set up a shared volume that mounts a host directory directly in the container. This setup allows access to raw sequencing data in the container and enables direct access to PRONAME results from the host machine:
 
 ~~~
-docker run -it --name proname_container -v /path/to/host/data:/data benn888/proname:v2.1.0-<arch>
+docker run -it --rm --name proname_container -v /path/to/host/data:/data benn888/proname:v2.1.1-<arch>
 ~~~
 where `/path/to/host/data` is the path to the directory on your host machine containing the raw sequencing data, and `/data` is the directory in the container where this data will be accessible. Place any files resulting from the PRONAME analysis in `/data` to access them directly from the host machine.
 

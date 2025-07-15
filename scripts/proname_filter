@@ -68,7 +68,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_filter from the PRONAME pipeline, version 2.1.0\n\n"
+    echo -ne "proname_filter from the PRONAME pipeline, version 2.1.1\n\n"
 }
 
 # Variable default values
@@ -452,7 +452,7 @@ then
          echo "proname_refine \\"
          echo "  --clusterid 0.90 \\"
          echo "  --inputpath RawData \\"
-         echo "  --medakamodel r1041_e82_400bps_sup_v4.2.0 \\"
+         echo "  --medakamodel r1041_e82_400bps_sup_v5.2.0 \\"
          echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
          echo "  --qiime2import yes"
          echo

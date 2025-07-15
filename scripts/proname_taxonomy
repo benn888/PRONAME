@@ -77,7 +77,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_taxonomy from the PRONAME pipeline, version 2.1.0\n\n"
+    echo -ne "proname_taxonomy from the PRONAME pipeline, version 2.1.1\n\n"
 }
 
 evalue="0.001"

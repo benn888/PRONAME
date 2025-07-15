@@ -69,7 +69,7 @@ Help()
    echo "proname_refine \\"
    echo "  --clusterid 0.90 \\"
    echo "  --inputpath RawData \\"
-   echo "  --medakamodel r1041_e82_400bps_sup_v5.0.0 \\"
+   echo "  --medakamodel r1041_e82_400bps_sup_v5.2.0 \\"
    echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
    echo "  --qiime2import yes"
    echo
@@ -77,7 +77,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_refine from the PRONAME pipeline, version 2.1.0\n\n"
+    echo -ne "proname_refine from the PRONAME pipeline, version 2.1.1\n\n"
 }
 
 
@@ -459,8 +459,9 @@ find . -maxdepth 1 -type f -name "*_seq_count" -exec cut -f1 {} \; | LC_ALL=C so
 
 for f in *_seq_count
 do
-   { head -n 1 "$f"; tail -n +2 "$f" | LC_ALL=C sort; } > "${f}_sorted" && mv "${f}_sorted" "$f"
-done   # to ensure that join works with sorted files
+   LC_ALL=C sort -t $'\t' -k1,1 "$f" > "${f}_sorted"
+   mv "${f}_sorted" "$f"
+done
 
 merge_column() {
    LC_ALL=C join -t $'\t' -a1 -e 0 -o auto Global_table "$1" > Global_table.tmp && mv Global_table.tmp Global_table
@@ -472,6 +473,9 @@ do
    merge_column "$f"
 done
 
+sed -n '/^Feature_ID/p' Global_table > Global_table_new
+sed '/^Feature_ID/d' Global_table >> Global_table_new
+mv Global_table_new Global_table
 
 ## Inverting lines and columns
 
@@ -538,10 +542,20 @@ echo -ne "$(head -n 1 Global_table)\n$(grep -f <(grep ">" rep_seqs.fasta | cut -
 
 # Clean-up
 
-find . -maxdepth 1 -type f -name "*_seq_count" -exec rm {} +
+if [ ${delete_non_essential} = "yes" ]
+then
+   find . -maxdepth 1 -type f -name "*_seq_count" -exec rm {} +
+else
+   mkdir -p cluster_seq_count_folder
+   find . -maxdepth 1 -type f -name "*_seq_count" -exec mv {} cluster_seq_count_folder \;
+fi
+
 rm clusters_seqids_linking_table
 rm Global_table
 rm medaka_consensus_seqs.fasta
+
+
+# Data import into QIIME2
 
 if [ ${qiime2_import} = "yes" ]
 then

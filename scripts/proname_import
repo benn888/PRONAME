@@ -177,7 +177,11 @@ mkdir Rawseqids
 
 for sample in $(ls ${fastq_folder} | awk -F '.fastq' '{print $1}')
 do
-   awk 'NR == 1 || (NR-1) % 4 == 0' ${fastq_folder}/${sample}.fastq | cut -d "@" -f 2 > Rawseqids/rawseqids_${sample}
+   awk 'NR == 1 || (NR-1) % 4 == 0' ${fastq_folder}/${sample}.fastq | sed 's/^@//' | awk '{
+      if (match($0, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}([;][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?/)) {
+        print substr($0, RSTART, RLENGTH)
+      }
+   }' > Rawseqids/rawseqids_${sample}
 done
 
 echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead distribution recorded! \033[0m\n"
@@ -297,8 +301,20 @@ then
       # Counting duplex and simplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of duplex and simplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n reads_simplex.fastq | sed 's/ .*//' | sort > simplex_read_ids_sorted.txt
-      seqkit seq -n reads_duplex.fastq | sed 's/ .*//' | sort > duplex_read_ids_sorted.txt
+      ## simplex reads
+      seqkit seq -n reads_simplex.fastq | awk '{
+         if (match($0, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}([;][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?/)) {
+            print substr($0, RSTART, RLENGTH)
+         }
+      }' | sort > simplex_read_ids_sorted.txt
+
+      ## duplex reads
+      seqkit seq -n reads_duplex.fastq | awk '{
+         if (match($0, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}([;][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?/)) {
+            print substr($0, RSTART, RLENGTH)
+         }
+      }' | sort > duplex_read_ids_sorted.txt
+
 
       echo -e "Sample_name\tSimplex_reads\tDuplex_reads" > simplex_duplex_read_distribution.tsv
 

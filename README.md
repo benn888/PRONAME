@@ -74,7 +74,8 @@ The best way to go is to type the name of each script followed by "--help" (e.g.
 ## 0. Before PRONAME
 
 The Nanopore sequencing data to import into PRONAME must be fastq files, i.e. basecalled reads. If you have raw-signal data (fast5 or pod5 files), you should first basecall them preferably with [Dorado](https://github.com/nanoporetech/dorado). For this tutorial, all fastq files (one file per sample) have been placed in the `RawData` directory.
-The fastq files analyzed in this tutorial can be found under accession PRJNA1299388 on the NCBI website.
+
+The fastq files analyzed in this tutorial can be found under accession [PRJNA1299388](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA1299388/) on the NCBI website.
 
 ## 1. proname_import
 

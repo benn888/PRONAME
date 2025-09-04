@@ -78,7 +78,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_import from the PRONAME pipeline, version 2.1.1\n\n"
+    echo -ne "proname_import from the PRONAME pipeline, version 2.1.3\n\n"
 }
 
 # Variable default values
@@ -168,6 +168,43 @@ exec_cmd() {
 
 ######################################################
 
+# Checking and decompressing gzipped files if present
+
+echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mChecking and decompressing gzipped files if present...\033[0m\n"
+
+if ls ${fastq_folder}/*.fastq.gz &>/dev/null
+then
+   parallel -j ${num_threads} 'gunzip {}' ::: ${fastq_folder}/*.fastq.gz
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mDecompression done!\033[0m\n"
+else
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : No gzipped files found, skipping decompression.\n"
+fi
+
+
+# Standardizing fastq headers
+
+echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mStandardizing fastq headers in all input files...\033[0m\n"
+
+for file in ${fastq_folder}/*.fastq
+do
+   awk '{
+      if (NR % 4 == 1) {
+         if (match($0, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(;[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?/)) {
+            print "@" substr($0, RSTART, RLENGTH);
+         } else {
+            sub(/ .*/, "", $0);
+            print $0
+         }
+      } else if (NR % 4 == 3) {
+         print "+"
+      } else {
+         print $0
+      }
+   }' "$file" > "${file}_tmp" && mv "${file}_tmp" "$file"
+done
+
+echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mHeader standardization done! \033[0m\n"
+
 
 # Listing the sequence identifiers present in each fastq file
 
@@ -175,13 +212,10 @@ echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mRecording read dist
 
 mkdir Rawseqids
 
-for sample in $(ls ${fastq_folder} | awk -F '.fastq' '{print $1}')
+for file in ${fastq_folder}/*.fastq
 do
-   awk 'NR == 1 || (NR-1) % 4 == 0' ${fastq_folder}/${sample}.fastq | sed 's/^@//' | awk '{
-      if (match($0, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}([;][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?/)) {
-        print substr($0, RSTART, RLENGTH)
-      }
-   }' > Rawseqids/rawseqids_${sample}
+   sample=$(basename "$file" .fastq)
+   awk 'NR == 1 || (NR-1) % 4 == 0 {sub(/^@/,""); print $0}' "$file" > Rawseqids/rawseqids_${sample}
 done
 
 echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead distribution recorded! \033[0m\n"
@@ -245,7 +279,7 @@ then
    # Mandatory arguments
 
    if [ ! "$fwd_primer" ] || [ ! "$rev_primer" ]; then
-      echo -ne "\n\033[31m\033[1mError: if primer trimming is required, arguments --fwprimer and --revprimer must be provided\033[0m\n\n"
+      echo -ne "\n\033[31m\033[1mError: if primer trimming is required, arguments --fwdprimer and --revprimer must be provided\033[0m\n\n"
       echo -ne "Please consult the help menu with 'proname_import --help'\n"
       exit;
    fi
@@ -302,27 +336,20 @@ then
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of duplex and simplex reads in the dataset...\033[0m\n"
 
       ## simplex reads
-      seqkit seq -n reads_simplex.fastq | awk '{
-         if (match($0, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}([;][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?/)) {
-            print substr($0, RSTART, RLENGTH)
-         }
-      }' | sort > simplex_read_ids_sorted.txt
+      seqkit seq -n reads_simplex.fastq | sort > simplex_read_ids_sorted.txt
 
       ## duplex reads
-      seqkit seq -n reads_duplex.fastq | awk '{
-         if (match($0, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}([;][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?/)) {
-            print substr($0, RSTART, RLENGTH)
-         }
-      }' | sort > duplex_read_ids_sorted.txt
-
+      seqkit seq -n reads_duplex.fastq | sort > duplex_read_ids_sorted.txt
 
       echo -e "Sample_name\tSimplex_reads\tDuplex_reads" > simplex_duplex_read_distribution.tsv
+
+      samples=$(find ${fastq_folder} -maxdepth 1 -type f -name "*.fastq" -exec basename {} .fastq \;)
 
       parallel -j ${num_threads} '
          simplex_count=$(sort Rawseqids/rawseqids_{} | comm -12 - simplex_read_ids_sorted.txt | grep -v ";" | wc -l)
          duplex_count=$(sort Rawseqids/rawseqids_{} | comm -12 - duplex_read_ids_sorted.txt | wc -l)
          echo -e "{}\t${simplex_count}\t${duplex_count}"
-      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//') >> simplex_duplex_read_distribution.tsv
+      ' ::: ${samples} >> simplex_duplex_read_distribution.tsv
 
       rm simplex_read_ids_sorted.txt
       rm duplex_read_ids_sorted.txt
@@ -350,13 +377,15 @@ then
       # Counting simplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of simplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n reads_simplex.fastq | sed 's/ .*//' | sort > simplex_read_ids_sorted.txt
+      seqkit seq -n reads_simplex.fastq | sort > simplex_read_ids_sorted.txt
 
       echo -e "Sample_name\tSimplex_reads" > simplex_read_distribution.tsv
 
+      samples=$(find ${fastq_folder} -maxdepth 1 -type f -name "*.fastq" -exec basename {} .fastq \;)
+
       parallel -j ${num_threads} '
          sort Rawseqids/rawseqids_{} | comm -12 - simplex_read_ids_sorted.txt | grep -v ";" | wc -l | awk -v sample={} "{print sample\"\t\"\$1}"
-      ' ::: $(ls ${fastq_folder} | sed 's/\.fastq$//') >> simplex_read_distribution.tsv
+      ' ::: ${samples} >> simplex_read_distribution.tsv
 
       rm simplex_read_ids_sorted.txt
 
@@ -490,3 +519,7 @@ unset no_counting
 unset sequencing_kit
 unset plot_format
 unset verbose
+unset sample
+unset samples
+
+

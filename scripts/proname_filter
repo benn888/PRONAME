@@ -68,7 +68,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_filter from the PRONAME pipeline, version 2.1.3\n\n"
+    echo -ne "proname_filter from the PRONAME pipeline, version 2.1.4\n\n"
 }
 
 # Variable default values

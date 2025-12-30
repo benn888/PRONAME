@@ -77,7 +77,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_refine from the PRONAME pipeline, version 2.1.3\n\n"
+    echo -ne "proname_refine from the PRONAME pipeline, version 2.1.4\n\n"
 }
 
 
@@ -150,7 +150,7 @@ done
 
 if [ ! "$clustering_id" ] || [ ! "$fastq_folder" ] || [ ! "$medaka_model" ] || [ ! "$qiime2_import" ]
 then
-   echo -ne "\n\033[31m\033[1mError: arguments --clusterid, --inputpath, --medakamodel, --chimeradb and --qiime2import must be provided\033[0m\n\n"
+   echo -ne "\n\033[31m\033[1mError: arguments --clusterid, --inputpath, --medakamodel and --qiime2import must be provided\033[0m\n\n"
    echo -ne "Please consult the help menu with 'proname_refine --help'\n"
    exit 1
 fi
@@ -225,6 +225,16 @@ if [ -f "HQ/HQ_simplex_duplex_seqs.fastq" ]
 then
   HQ_fastq="HQ/HQ_simplex_duplex_seqs.fastq"
 fi
+
+## Checking that ${HQ_fastq} is not empty
+
+if [ -z "${HQ_fastq:-}" ] || [ ! -s "${HQ_fastq}" ]
+then
+  echo -e "\n\033[31m\033[1mError: No HQ input found. Did proname_filter complete?\033[0m"
+  echo "Expected one of: HQ/HQ_simplex_seqs.fastq | HQ/HQ_duplex_seqs.fastq | HQ/HQ_simplex_duplex_seqs.fastq"
+  exit 1
+fi
+
 
 # Removing items from a potential previous failed run
 
@@ -428,13 +438,20 @@ fi
 export clustering_method
 export medaka_threads
 
-find "${clustering_method}_clusters" -type f -name "consensus.fasta" -path "*medaka_*" > consensus_paths.txt
-parallel --jobs "$medaka_threads" --no-run-if-empty '
-    i=$(basename $(dirname {}) | cut -d "_" -f 2)
-    rep_seq=$(grep ">" {} | cut -d ">" -f 2)
-    printf "%s\t%s\n" "$i" "$rep_seq"
-' :::: consensus_paths.txt > clusters_seqids_linking_table
-rm consensus_paths.txt
+find "${clustering_method}_clusters" -type f -name "consensus.fasta" -path "*medaka_*" -print0 > consensus_paths.txt
+
+if ! [ -s consensus_paths.txt ]; then
+    echo "[ERROR] No medaka consensus.fasta found under ${clustering_method}_clusters/medaka_*/" >&2
+    exit 1
+fi
+
+parallel -0 --jobs "$medaka_threads" --no-run-if-empty --halt now,fail=1 \
+  'dir="{//}"; base="${dir##*/}"; id="${base#medaka_}"; \
+   rep=$(awk '\''BEGIN{rc=1} /^>/{sub(/^>/,""); print $1; rc=0; exit} END{exit rc}'\'' "{}") || exit 2; \
+   printf "%s\t%s\n" "$id" "$rep"' \
+:::: consensus_paths.txt > clusters_seqids_linking_table
+
+rm -f consensus_paths.txt
 
 
 # Creating the feature table
@@ -445,11 +462,21 @@ echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCreating a feature 
 add_header() {
     sample_id=$(basename "$1" _seq_count)
     header=$(awk -v id="$sample_id" '$1==id {print $2}' clusters_seqids_linking_table)
+    if [ -z "$header" ]; then
+        echo "WARNING: no representative sequence ID found for ${sample_id} in clusters_seqids_linking_table" >&2
+        # exit 1
+    fi
     { echo -e "Feature_ID\t$header"; cat "$1"; } > "${1}_tmp" && mv "${1}_tmp" "$1"
 }
 export -f add_header
 
 find . -maxdepth 1 -type f -name "*_seq_count" > seq_count_files.txt
+
+# Sanitize seq_count files: remove BOM, NULs, CRLF
+while IFS= read -r f; do
+  sed '1s/^\xEF\xBB\xBF//' "$f" | tr -d '\000' | sed 's/\r$//' > "${f}.clean" && mv "${f}.clean" "$f"
+done < seq_count_files.txt
+
 parallel --jobs "$medaka_threads" --no-run-if-empty add_header :::: seq_count_files.txt
 rm seq_count_files.txt
 
@@ -538,8 +565,14 @@ fi
 awk '{if ($0 ~ /^>/) {print $0} else {print toupper($0)}}' rep_seqs.fasta > rep_seqs.fasta_tmp
 mv rep_seqs.fasta_tmp rep_seqs.fasta
 
-echo -ne "$(head -n 1 Global_table)\n$(grep -f <(grep ">" rep_seqs.fasta | cut -d ">" -f 2) Global_table)\n" > rep_table.tsv
+# Sanitize Global_table (remove NULs/CRLF)
+tr -d '\000' < Global_table | sed 's/\r$//' > Global_table_tmp && mv Global_table_tmp Global_table
 
+{
+  head -n 1 Global_table
+  grep "^>" rep_seqs.fasta | sed 's/^>//' | awk '{print $1}' \
+  | grep -a -F -f - Global_table
+} > rep_table.tsv
 
 # Clean-up
 
@@ -643,15 +676,15 @@ then
       echo
       echo -ne "(ii) If QIIME2 is not installed on your host machine, run the following commands manually on it:\n\n"
       echo -ne "\033[1m# Importing feature table into QIIME2\033[0m\n"
-      echo -ne "docker run --rm -v /path/to/host/data:/data quay.io/qiime2/core:2024.5 qiime tools import \\ \n"
+      echo -ne "docker run --rm -v /path/to/host/data:/data quay.io/qiime2/core:2023.9 qiime tools import \\ \n"
       echo -ne "  --input-path rep_table.biom \\ \n"
       echo -ne "  --type 'FeatureTable[Frequency]' \\ \n"
       echo -ne "  --input-format BIOMV210Format \\ \n"
       echo -ne "  --output-path rep_table.qza \n"
       echo
       echo -ne "\033[1m# Importing representative sequences into QIIME2\033[0m\n"
-      echo -ne "docker run --rm -v /path/to/host/data:/data quay.io/qiime2/core:2024.5 qiime tools import \\ \n"
-      echo -ne "  --type FeatureData[Sequence] \\ \n"
+      echo -ne "docker run --rm -v /path/to/host/data:/data quay.io/qiime2/core:2023.9 qiime tools import \\ \n"
+      echo -ne "  --type 'FeatureData[Sequence]' \\ \n"
       echo -ne "  --input-path rep_seqs.fasta \\ \n"
       echo -ne "  --output-path rep_seqs.qza \n\n"
 

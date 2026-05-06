@@ -68,7 +68,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_filter from the PRONAME pipeline, version 2.1.4\n\n"
+    echo -ne "proname_filter from the PRONAME pipeline, version 2.2.0\n\n"
 }
 
 # Variable default values
@@ -173,7 +173,11 @@ then
    for file in ${fastq_folder}/*.fastq
    do
       sample=$(basename "$file" .fastq)
-      awk 'NR == 1 || (NR-1) % 4 == 0 {sub(/^@/,""); print $0}' "$file" > Rawseqids/rawseqids_${sample}
+      awk 'NR == 1 || (NR-1) % 4 == 0 {
+           sub(/^@/, "", $0)
+           split($0, a, /[ \t]+/)
+           print a[1]
+        }' "$file" > Rawseqids/rawseqids_${sample}
    done
 
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead distribution recorded! \033[0m\n"
@@ -211,7 +215,7 @@ then
       # Counting duplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality duplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n HQ/HQ_duplex_seqs.fastq | sort > HQ_duplex_read_ids_sorted.txt
+      seqkit seq -n HQ/HQ_duplex_seqs.fastq | awk '{print $1}' | LC_ALL=C sort > HQ_duplex_read_ids_sorted.txt
 
       echo -e "Sample_name\tHQ_duplex_reads" > HQ_duplex_read_distribution.tsv
 
@@ -270,6 +274,18 @@ then
          echo -ne "Please consult the help menu.\n"
          exit;
       fi
+   else
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : The next script of the pipeline to use is \033[1mproname_refine\033[0m.\n\n"
+      echo -ne "\nUsage example:"
+      echo -ne "\n-------------"
+      echo
+      echo "proname_refine \\"
+      echo "  --clusterid 0.90 \\"
+      echo "  --inputpath RawData \\"
+      echo "  --medakamodel r1041_e82_400bps_sup_v5.2.0 \\"
+      echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
+      echo "  --qiime2import yes"
+      echo
    fi
 fi
 
@@ -305,7 +321,7 @@ then
       # Counting simplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality simplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n HQ/HQ_simplex_seqs.fastq | sort > HQ_simplex_read_ids_sorted.txt
+      seqkit seq -n HQ/HQ_simplex_seqs.fastq | awk '{print $1}' | LC_ALL=C sort > HQ_simplex_read_ids_sorted.txt
 
       echo -e "Sample_name\tHQ_simplex_reads" > HQ_simplex_read_distribution.tsv
 
@@ -365,6 +381,18 @@ then
          echo -ne "Please consult the help menu.\n"
          exit;
       fi
+   else
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : The next script of the pipeline to use is \033[1mproname_refine\033[0m.\n\n"
+      echo -ne "\nUsage example:"
+      echo -ne "\n-------------"
+      echo
+      echo "proname_refine \\"
+      echo "  --clusterid 0.90 \\"
+      echo "  --inputpath RawData \\"
+      echo "  --medakamodel r1041_e82_400bps_sup_v5.2.0 \\"
+      echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
+      echo "  --qiime2import yes"
+      echo
    fi
 fi
 
@@ -404,9 +432,9 @@ then
       # Counting duplex and simplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of high-quality duplex and simplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n HQ/HQ_simplex_seqs.fastq | sort > HQ_simplex_read_ids_sorted.txt
+      seqkit seq -n HQ/HQ_simplex_seqs.fastq | awk '{print $1}' | LC_ALL=C sort > HQ_simplex_read_ids_sorted.txt
 
-      seqkit seq -n HQ/HQ_duplex_seqs.fastq | sort > HQ_duplex_read_ids_sorted.txt
+      seqkit seq -n HQ/HQ_duplex_seqs.fastq | awk '{print $1}' | LC_ALL=C sort > HQ_duplex_read_ids_sorted.txt
 
       echo -e "Sample_name\tHQ_simplex_reads\tHQ_duplex_reads" > HQ_simplex_duplex_read_distribution.tsv
 
@@ -469,6 +497,18 @@ then
          echo -ne "Please consult the help menu.\n"
          exit;
       fi
+   else
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : The next script of the pipeline to use is \033[1mproname_refine\033[0m.\n\n"
+      echo -ne "\nUsage example:"
+      echo -ne "\n-------------"
+      echo
+      echo "proname_refine \\"
+      echo "  --clusterid 0.90 \\"
+      echo "  --inputpath RawData \\"
+      echo "  --medakamodel r1041_e82_400bps_sup_v5.2.0 \\"
+      echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
+      echo "  --qiime2import yes"
+      echo
    fi
 fi
 

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -o pipefail
+
 echo -ne "\n**************************************************************************************************************\n"
 echo -ne "* You are executing the \033[1mproname_import\033[0m script, which is the first part of the \033[1mPRONAME\033[0m pipeline.              *\n"
 echo -ne "*                                                                                                            *\n"
@@ -14,57 +16,67 @@ Help()
 ## Display Help
    echo -ne "\nThe proname_import script is the first part of the PRONAME pipeline and allows importing Nanopore metabarcoding data into the pipeline and initial processing. \nIt includes the trimming of adapter and primer sequences if asked by the user, the counting of simplex reads and duplex reads (if applicable), \nand the creation of Length vs Quality scatter plots."
    echo
-   echo -ne "\nSyntax: proname_import [--inputpath|--threads|--duplex|--trimadapters|--sequencingkit|--trimprimers|--fwdprimer|--revprimer|--primererrorrate|--nocounting|--plotformat|--noscatterplot|--version|--verbose|--help]"
+   echo -ne "\nSyntax: proname_import [--inputpath|--threads|--duplex|--trimadapters|--sequencingkit|--trimprimers|--fwdprimer|--revprimer|--primererrorrate|--primertrimmingmode|--nocounting|--plotformat|--noscatterplot|--version|--verbose|--help]"
    echo
    echo "Options:"
-   echo -ne "\t--inputpath\tPath to the folder containing raw fastq files. To prevent file conflicts and ensure accurate sequence counting, \n"
-   echo -ne "\t\t\tyour raw FASTQ files must be stored in a separate directory (e.g., /data/RawData). Do not place them directly in your \n"
-   echo -ne "\t\t\tworking directory, as this is where proname_import writes all its output files. Mixing input and output files in the \n"
-   echo -ne "\t\t\tsame location can lead to errors and unreliable results.\n"
+   echo -ne "\t--inputpath\t\tPath to the folder containing raw fastq files. To prevent file conflicts and ensure accurate sequence counting, \n"
+   echo -ne "\t\t\t\tyour raw FASTQ files must be stored in a separate directory (e.g., /data/RawData). Do not place them directly in your \n"
+   echo -ne "\t\t\t\tworking directory, as this is where proname_import writes all its output files. Mixing input and output files in the \n"
+   echo -ne "\t\t\t\tsame location can lead to errors and unreliable results.\n"
    echo
-   echo -ne "\t--threads\tNumber of threads to use for the Guppy adapter-trimming step and/or the Cutadapt primmer-trimming step. \n"
-   echo -ne "\t\t\tYou can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2]\n"
+   echo -ne "\t--threads\t\tNumber of threads to use for the Guppy adapter-trimming step and/or the Cutadapt primer-trimming step. \n"
+   echo -ne "\t\t\t\tYou can know the number of available threads on your computer by running the command 'nproc --all' [Default: 2]\n"
    echo
-   echo -ne "\t--duplex\tIndicate whether your sequencing data include duplex reads or not. Duplex reads are high-quality reads \n"
-   echo -ne "\t\t\tthat were introduced with the kit 14 chemistry. [Options: \"yes\" or \"no\"]\n"
+   echo -ne "\t--duplex\t\tIndicate whether your sequencing data include duplex reads or not. Duplex reads are high-quality reads \n"
+   echo -ne "\t\t\t\tthat were introduced with the kit 14 chemistry. [Options: \"yes\" or \"no\"]\n"
    echo
-   echo -ne "\t--trimadapters\tIndicate whether your sequencing data contain adapters that should be trimmed. [Options: \"yes\" or \"no\"]\n"
+   echo -ne "\t--trimadapters\t\tIndicate whether your sequencing data contain adapters that should be trimmed. [Options: \"yes\" or \"no\"]\n"
+   echo -ne "\t\t\t\tWhen set to \"yes\", PRONAME uses 'dorado trim' on the input FASTQ files.\n"
    echo
-   echo -ne "\t--sequencingkit\tName of the ONT sequencing kit used to generate the library(-ies). [Default: \"SQK-LSK114\"]\n"
+   echo -ne "\t--sequencingkit\t\tName of the ONT sequencing kit used to generate the library(-ies). [Default: \"SQK-LSK114\"]\n"
    echo
-   echo -ne "\t--trimprimers\tIndicate whether your sequencing data contain primers that should be trimmed. [Options: \"yes\" or \"no\"]\n"
+   echo -ne "\t--trimprimers\t\tIndicate whether your sequencing data contain primers that should be trimmed. [Options: \"yes\" or \"no\"]\n"
+   echo -ne "\t\t\t\tPrimer trimming is performed with Cutadapt on the FASTQ files produced by proname_import.\n"
+   echo -ne "\t\t\t\tWhen enabled, primer trimming is performed while preserving Dorado move tables (mv tags) whenever they \n"
+   echo -ne "\t\t\t\tare present, allowing move-aware polishing in downstream steps (i.e. Dorado polishing in proname_refine).\n"
    echo
-   echo -ne "\t--fwdprimer\tThe sequence of the forward primer used during PCR to amplify DNA. If barcoded primers were used to \n"
-   echo -ne "\t\t\tmultiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. \n"
-   echo -ne "\t\t\tThis argument is required if --trimprimers is set to \"yes\".\n"
+   echo -ne "\t--fwdprimer\t\tThe sequence of the forward primer used during PCR to amplify DNA. If barcoded primers were used to \n"
+   echo -ne "\t\t\t\tmultiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. \n"
+   echo -ne "\t\t\t\tThis argument is required if --trimprimers is set to \"yes\".\n"
    echo
-   echo -ne "\t--revprimer\tThe sequence of the reverse primer used during PCR to amplify DNA. If barcoded primers were used to \n"
-   echo -ne "\t\t\tmultiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. \n"
-   echo -ne "\t\t\tThis argument is required if --trimprimers is set to \"yes\".\n"
+   echo -ne "\t--revprimer\t\tThe sequence of the reverse primer used during PCR to amplify DNA. If barcoded primers were used to \n"
+   echo -ne "\t\t\t\tmultiplex samples, please provide here only the target-specific part of the primer in 5'->3' orientation. \n"
+   echo -ne "\t\t\t\tThis argument is required if --trimprimers is set to \"yes\".\n"
    echo
    echo -ne "\t--primererrorrate\tMaximum allowed mismatch rate between primer sequences and reads during primer trimming. \n"
-   echo -ne "\t\t\tThis value controls the tolerance to sequencing errors in primer regions. For example, 0.15 allows up to 15% mismatches \n"
-   echo -ne "\t\t\tbetween the primer and the read. Increasing this value may recover more reads but also raises the risk of \n"
-   echo -ne "\t\t\tunspecific matches. [Default: 0.15]\n"
+   echo -ne "\t\t\t\tThis value controls the tolerance to sequencing errors in primer regions. For example, 0.15 allows up to 15% mismatches \n"
+   echo -ne "\t\t\t\tbetween the primer and the read. Increasing this value may recover more reads but also raises the risk of \n"
+   echo -ne "\t\t\t\tunspecific matches. [Default: 0.15]\n"
    echo
-   echo -ne "\t--nocounting\tWhen this argument is set to \"yes\", counting of simplex/duplex reads is not performed. \n"
-   echo -ne "\t\t\t[Options: \"yes\" or \"no\", Default: \"no\"]\n"
+   echo -ne "\t--primertrimmingmode\tPrimer trimming mode for Cutadapt: \n"
+   echo -ne "\t\t\t\t\t- soft: keep all reads (default)\n"
+   echo -ne "\t\t\t\t\t- hard: keep only reads where a valid forward–reverse primer configuration was detected\n"
+   echo -ne "\t\t\t\t[Options: \"soft\" or \"hard\", Default: \"soft\"]\n"
    echo
-   echo -ne "\t--plotformat\tFormat of the scatterplot visualization files produced. It can be either \"png\" or \"html\".  \n"
-   echo -ne "\t\t\tSince NanoPlot produces empty png plots for an unknown reason, it is only used to generate html visualizations. \n"
-   echo -ne "\t\t\tpng plots are produced using the custom script scaleq.py. [Default: \"png\"] \n"
+   echo -ne "\t--nocounting\t\tWhen this argument is set to \"yes\", counting of simplex/duplex reads is not performed. \n"
+   echo -ne "\t\t\t\t[Options: \"yes\" or \"no\", Default: \"no\"]\n"
    echo
-   echo -ne "\t--noscatterplot\tWhen this argument is set to \"yes\", no length vs. quality scatterplot is generated. Since this is a time-consuming step, \n"
-   echo -ne "\t\t\tthis possiblity has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip \n"
-   echo -ne "\t\t\tthis scatterplot generation. Visual inspection of these plots is crucial for deciding which type of read to work with \n"
-   echo -ne "\t\t\t(duplex and/or simplex) and which length and quality thresholds to apply. [Options: \"yes\" or \"no\", Default: \"no\"]\n"
+   echo -ne "\t--plotformat\t\tFormat of the scatterplot visualization files produced. It can be either \"png\" or \"html\".  \n"
+   echo -ne "\t\t\t\tSince NanoPlot produces empty png plots for an unknown reason, it is only used to generate html visualizations. \n"
+   echo -ne "\t\t\t\tpng plots are produced using the custom script scaleq.py. [Default: \"png\"] \n"
    echo
-   echo -ne "\t--version\tPrint the version of the pipeline.\n"
+   echo -ne "\t--noscatterplot\t\tWhen this argument is set to \"yes\", no length vs. quality scatterplot is generated. Since this is a time-consuming step, \n"
+   echo -ne "\t\t\t\tthis possibility has been made available to increase the flexibility of the pipeline. However, it is strongly discouraged to skip \n"
+   echo -ne "\t\t\t\tthis scatterplot generation. Visual inspection of these plots is crucial for deciding which type of read to work with \n"
+   echo -ne "\t\t\t\t(duplex and/or simplex) and which length and quality thresholds to apply. [Options: \"yes\" or \"no\", Default: \"no\"]\n"
    echo
-   echo -ne "\t--verbose\tActivate verbose/debug mode (no redirections).\n"
+   echo -ne "\t--version\t\tPrint the version of the pipeline.\n"
    echo
-   echo -ne "\t--help\t\tPrint this help."
+   echo -ne "\t--verbose\t\tActivate verbose/debug mode (no redirections).\n"
    echo
+   echo -ne "\t--help\t\t\tPrint this help."
+   echo
+   
 
 
 ## Usage example
@@ -83,7 +95,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_import from the PRONAME pipeline, version 2.1.4\n\n"
+    echo -ne "proname_import from the PRONAME pipeline, version 2.2.0\n\n"
 }
 
 # Variable default values
@@ -91,7 +103,8 @@ num_threads="2"
 no_scatterplot="no"
 no_counting="no"
 sequencing_kit="SQK-LSK114"
-primer_error_rate="0.15"
+primer_error_rate="0.2"
+primer_trimming_mode="soft"
 plot_format="png"
 verbose=false
 
@@ -100,29 +113,30 @@ verbose=false
 for arg in "$@"; do
   shift
   case "$arg" in
-    '--help')            set -- "$@" '-h'   ;;
-    '--version')         set -- "$@" '-v'   ;;
-    '--inputpath')       set -- "$@" '-a'   ;;
-    '--threads')         set -- "$@" '-b'   ;;
-    '--duplex')          set -- "$@" '-c'   ;;
-    '--trimadapters')    set -- "$@" '-d'   ;;
-    '--trimprimers')     set -- "$@" '-e'   ;;
-    '--fwdprimer')       set -- "$@" '-f'   ;;
-    '--revprimer')       set -- "$@" '-g'   ;;
-    '--primererrorrate') set -- "$@" '-m'   ;;
-    '--noscatterplot')   set -- "$@" '-i'   ;;
-    '--nocounting')      set -- "$@" '-j'   ;;
-    '--sequencingkit')   set -- "$@" '-k'   ;;
-    '--plotformat')      set -- "$@" '-l'   ;;
-    '--verbose')         verbose=true ;;
-    *)                   set -- "$@" "$arg" ;;
+    '--help')               set -- "$@" '-h'   ;;
+    '--version')            set -- "$@" '-v'   ;;
+    '--inputpath')          set -- "$@" '-a'   ;;
+    '--threads')            set -- "$@" '-b'   ;;
+    '--duplex')             set -- "$@" '-c'   ;;
+    '--trimadapters')       set -- "$@" '-d'   ;;
+    '--trimprimers')        set -- "$@" '-e'   ;;
+    '--fwdprimer')          set -- "$@" '-f'   ;;
+    '--revprimer')          set -- "$@" '-g'   ;;
+    '--primererrorrate')    set -- "$@" '-m'   ;;
+    '--primertrimmingmode') set -- "$@" '-n'   ;;
+    '--noscatterplot')      set -- "$@" '-i'   ;;
+    '--nocounting')         set -- "$@" '-j'   ;;
+    '--sequencingkit')      set -- "$@" '-k'   ;;
+    '--plotformat')         set -- "$@" '-l'   ;;
+    '--verbose')            verbose=true ;;
+    *)                      set -- "$@" "$arg" ;;
   esac
 done
 
 
 # Parse short options
 
-while getopts :hva:b:c:d:e:f:g:m:i:j:k:l: flag
+while getopts :hva:b:c:d:e:f:g:m:n:i:j:k:l: flag
 do
     case "${flag}" in
         h) Help
@@ -137,6 +151,7 @@ do
         f) fwd_primer=${OPTARG};;
         g) rev_primer=${OPTARG};;
         m) primer_error_rate=${OPTARG};;
+        n) primer_trimming_mode=${OPTARG};;
         i) no_scatterplot=${OPTARG};;
         j) no_counting=${OPTARG};;
         k) sequencing_kit=${OPTARG};;
@@ -150,7 +165,6 @@ done
 
 
 # Mandatory arguments
-
 if [ ! "$fastq_folder" ] || [ ! "$duplex_data" ] || [ ! "$adapter_trimming" ] || [ ! "$primer_trimming" ]; then
   echo -ne "\n\033[31m\033[1mError: arguments --inputpath, --duplex, --trimadapters and --trimprimers must be provided\033[0m\n\n"
   echo -ne "Please consult the help menu with 'proname_import --help'\n"
@@ -164,6 +178,12 @@ then
    exit 1
 fi
 
+if [[ "$primer_trimming_mode" != "soft" && "$primer_trimming_mode" != "hard" ]]
+then
+   echo -ne "\n\033[31m\033[1mError: the value of --primertrimmingmode must be 'soft' or 'hard'.\033[0m\n\n"
+   echo -ne "Please consult the help menu with 'proname_import --help'\n"
+   exit 1
+fi
 
 # Define exec_cmd function for conditional verbosity
 exec_cmd() {
@@ -180,38 +200,17 @@ exec_cmd() {
 
 echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mChecking and decompressing gzipped files if present...\033[0m\n"
 
-if ls ${fastq_folder}/*.fastq.gz &>/dev/null
+if ls "${fastq_folder}"/*.fastq.gz &>/dev/null
 then
-   parallel -j ${num_threads} 'gunzip {}' ::: ${fastq_folder}/*.fastq.gz
+   if ! parallel -j ${num_threads} 'gunzip {}' ::: "${fastq_folder}"/*.fastq.gz
+   then
+      echo -ne "\n\033[31m\033[1mError: decompression failed.\033[0m\n\n"
+      exit 1
+   fi
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mDecompression done!\033[0m\n"
 else
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mNo gzipped files found, skipping decompression.\033[0m\n"
 fi
-
-
-# Standardizing fastq headers
-
-echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mStandardizing fastq headers in all input files...\033[0m\n"
-
-for file in ${fastq_folder}/*.fastq
-do
-   awk '{
-      if (NR % 4 == 1) {
-         if (match($0, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(;[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?/)) {
-            print "@" substr($0, RSTART, RLENGTH);
-         } else {
-            sub(/ .*/, "", $0);
-            print $0
-         }
-      } else if (NR % 4 == 3) {
-         print "+"
-      } else {
-         print $0
-      }
-   }' "$file" > "${file}_tmp" && mv "${file}_tmp" "$file"
-done
-
-echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mHeader standardization done! \033[0m\n"
 
 
 # Listing the sequence identifiers present in each fastq file
@@ -220,10 +219,14 @@ echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mRecording read dist
 
 mkdir -p Rawseqids
 
-for file in ${fastq_folder}/*.fastq
+for file in "${fastq_folder}"/*.fastq
 do
    sample=$(basename "$file" .fastq)
-   awk 'NR == 1 || (NR-1) % 4 == 0 {sub(/^@/,""); print $0}' "$file" > Rawseqids/rawseqids_${sample}
+   awk 'NR == 1 || (NR-1) % 4 == 0 {
+         sub(/^@/, "", $0)
+         split($0, a, /[ \t]+/)
+         print a[1]
+     }' "$file" > Rawseqids/rawseqids_${sample}
 done
 
 echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead distribution recorded! \033[0m\n"
@@ -238,7 +241,11 @@ then
    # Concatenating fastq files
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mConcatenating fastq files...\033[0m\n"
 
-   cat ${fastq_folder}/* > reads_simplex_duplex.fastq
+   if ! cat "${fastq_folder}"/* > reads_simplex_duplex.fastq
+   then
+      echo -ne "\n\033[31m\033[1mError: concatenation of FASTQ files failed.\033[0m\n\n"
+      exit 1
+   fi
 
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mConcatenating completed! \033[0m\n"
 fi
@@ -250,25 +257,34 @@ fi
 if [ ${adapter_trimming} = "yes" ]
 then
    # Removing adapters
-
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mTrimming adapters from reads...\033[0m\n"
-
+   
    mkdir Dorado_adapter_trimmed
 
-   for i in $(ls ${fastq_folder})
+   for i in "${fastq_folder}"/*.fastq
    do
-      dorado trim \
+      base_i=$(basename "$i")
+      if ! dorado trim \
          --no-trim-primers \
          --emit-fastq \
          --threads ${num_threads} \
          --sequencing-kit ${sequencing_kit} \
-         ${fastq_folder}/${i} > Dorado_adapter_trimmed/trimmed_${i}
+         "$i" > "Dorado_adapter_trimmed/trimmed_${base_i}"
+      then
+         echo -ne "\n\033[31m\033[1mError: dorado trim failed on ${base_i}.\033[0m\n\n"
+         exit 1
+      fi
    done
 
-   cat Dorado_adapter_trimmed/*.fastq > reads_simplex_duplex.fastq
+   if ! cat Dorado_adapter_trimmed/*.fastq > reads_simplex_duplex.fastq
+   then
+      echo -ne "\n\033[31m\033[1mError: concatenation of adapter-trimmed FASTQ files failed.\033[0m\n\n"
+      exit 1
+   fi
+
    rm -r Dorado_adapter_trimmed
 
-   if [ -e "reads_simplex_duplex.fastq" ]
+   if [ -s "reads_simplex_duplex.fastq" ]
    then
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mAdapter trimming completed! \033[0m\n"
    else
@@ -285,7 +301,6 @@ fi
 if [ ${primer_trimming} = "yes" ]
 then
    # Mandatory arguments
-
    if [ ! "$fwd_primer" ] || [ ! "$rev_primer" ]; then
       echo -ne "\n\033[31m\033[1mError: if primer trimming is required, arguments --fwdprimer and --revprimer must be provided\033[0m\n\n"
       echo -ne "Please consult the help menu with 'proname_import --help'\n"
@@ -297,6 +312,7 @@ then
    rev_primer=$(echo -n "$rev_primer" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')
 
    # Reverse-complement of the reverse primer (this is the sequence that actually appears in reads)
+   RC_fwd_primer=$(echo -ne ">fwd_primer\n${fwd_primer}\n" | seqkit seq -r -p -t DNA 2>/dev/null | grep -v ">")
    RC_rev_primer=$(echo -ne ">rev_primer\n${rev_primer}\n" | seqkit seq -r -p -t DNA 2>/dev/null | grep -v ">")
 
    # If primers contain IUPAC ambiguities, enable wildcard matching
@@ -321,34 +337,119 @@ then
 
    # Trimming primer sequences from reads
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mTrimming primers from reads...\033[0m\n"
-   exec_cmd "cutadapt \
+
+   if [ "$primer_trimming_mode" = "hard" ]
+   then
+      DISCARD_UNTRIMMED="--discard-untrimmed"
+   else
+     DISCARD_UNTRIMMED=""
+   fi
+
+   if ! exec_cmd "cutadapt \
       -j ${num_threads} \
-      --revcomp \
       -g \"${fwd_primer}...${RC_rev_primer}\" \
+      -g \"${rev_primer}...${RC_fwd_primer}\" \
       ${MATCH_WC} \
       --error-rate ${primer_error_rate} \
       --overlap ${overlap} \
+      --buffer-size 52428800 \
+      ${DISCARD_UNTRIMMED} \
       -o cutadapt_output.fastq \
       reads_simplex_duplex.fastq"
+   then
+      echo -ne "\n\033[31m\033[1m[ERROR] Cutadapt failed during primer trimming.\033[0m\n"
+      echo -ne "Run again with --verbose to see Cutadapt output.\n\n"
+      exit 1
+   fi
    
-   if [ -e "cutadapt_output.fastq" ]
+   if [ -s "cutadapt_output.fastq" ]
    then
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mPrimer trimming completed! \033[0m\n"
+      
+      if grep -m 1 -qE '(^@|[[:blank:]])mv:B:[cC],' reads_simplex_duplex.fastq
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mAdjusting move tables...\033[0m\n"
+         cp reads_simplex_duplex.fastq reads_simplex_duplex.with_moves.fastq
+         mv cutadapt_output.fastq reads_simplex_duplex.trimmed.fastq
 
-      mv cutadapt_output.fastq reads_simplex_duplex.fastq
+         # Original FASTQ → unaligned BAM with tags
+         if ! exec_cmd "awk '
+            BEGIN { print \"@HD\tVN:1.6\tSO:unknown\" }
+            NR % 4 == 1 {
+              header = \$0
+              sub(/^@/, \"\", header)
+              n = split(header, a, /[ \t]+/)
+              qname = a[1]
+              tags = \"\"
+              for (i = 2; i <= n; i++) {
+                if (a[i] ~ /^[A-Za-z][A-Za-z]:[A-Za-z]:/) {
+                  tags = tags \"\t\" a[i]
+                }
+              }
+            }
+            NR % 4 == 2 { seq = \$0 }
+            NR % 4 == 0 {
+              qual = \$0
+              printf \"%s\t4\t*\t0\t0\t*\t*\t0\t0\t%s\t%s%s\n\", qname, seq, qual, tags
+            }
+            ' reads_simplex_duplex.with_moves.fastq | samtools view -bS -o reads_simplex_duplex.with_moves.bam -"
+         then
+            echo -ne "\n\033[31m\033[1m[ERROR] Failed to create intermediate BAM with move tags.\033[0m\n"
+            echo -ne "Temporary files were kept for debugging.\n\n"
+            exit 1
+         fi
 
-      # Normalizing FASTQ headers after cutadapt to strip added annotations " rc"
-      awk '{
-        if (NR % 4 == 1) {
-           sub(/ .*/, "", $0);
-           print $0
-        } else if (NR % 4 == 3) {
-           print "+"
-        } else {
-           print $0
-        }
-      }' reads_simplex_duplex.fastq > reads_simplex_duplex.norm.fastq
-      mv reads_simplex_duplex.norm.fastq reads_simplex_duplex.fastq
+         # Adjusting moves
+         if ! exec_cmd "python3 /opt/scripts/trim_primer_moves.py \
+            --bam reads_simplex_duplex.with_moves.bam \
+            --fastq reads_simplex_duplex.trimmed.fastq \
+            --output reads_simplex_duplex.trimmed_with_moves.bam \
+            --max-error-reads 10000"
+         then
+            echo -ne "\n\033[31m\033[1m[ERROR] trim_primer_moves.py failed.\033[0m\n"
+            echo -ne "Temporary files were kept for debugging.\n\n"
+            exit 1
+         fi
+
+         if [ ! -s "reads_simplex_duplex.trimmed_with_moves.bam" ]
+         then
+            echo -ne "\n\033[31m\033[1m[ERROR] Move-adjusted BAM was not created or is empty.\033[0m\n"
+            echo -ne "Temporary files were kept for debugging.\n\n"
+            exit 1
+         fi
+
+         # Final BAM → final FASTQ with tags
+         if ! exec_cmd "samtools fastq \
+            -@ ${num_threads} \
+            -n \
+            -T mv,qs,ts,ch,st,RG,DS,PU,DT \
+            reads_simplex_duplex.trimmed_with_moves.bam \
+            > reads_simplex_duplex.fastq"
+         then
+            echo -ne "\n\033[31m\033[1m[ERROR] samtools fastq failed while rebuilding the final FASTQ with preserved tags.\033[0m\n"
+            echo -ne "Temporary files were kept for debugging.\n\n"
+            exit 1
+         fi
+
+         if [ ! -s "reads_simplex_duplex.fastq" ]
+         then
+            echo -ne "\n\033[31m\033[1m[ERROR] Final move-aware FASTQ was not created or is empty.\033[0m\n"
+            echo -ne "Temporary files were kept for debugging.\n\n"
+            exit 1
+         fi
+
+         # Clean-up
+         rm -f \
+            reads_simplex_duplex.with_moves.fastq \
+            reads_simplex_duplex.with_moves.bam \
+            reads_simplex_duplex.trimmed.fastq \
+            reads_simplex_duplex.trimmed_with_moves.bam
+
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mMove tables adjusted! \033[0m\n"
+            
+      else
+         mv cutadapt_output.fastq reads_simplex_duplex.fastq
+      fi
 
    else
       echo -ne "\n\033[31m\033[1mError: primer trimming failed. \033[0m\n\n"
@@ -374,10 +475,10 @@ then
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of duplex and simplex reads in the dataset...\033[0m\n"
 
       ## simplex reads
-      seqkit seq -n reads_simplex.fastq  | tr -d '\r' | LC_ALL=C sort -u > simplex_read_ids_sorted.txt
+      seqkit seq -n reads_simplex.fastq  | tr -d '\r' | awk '{print $1}' | LC_ALL=C sort -u > simplex_read_ids_sorted.txt
 
       ## duplex reads
-      seqkit seq -n reads_duplex.fastq   | tr -d '\r' | LC_ALL=C sort -u > duplex_read_ids_sorted.txt
+      seqkit seq -n reads_duplex.fastq   | tr -d '\r' | awk '{print $1}' | LC_ALL=C sort -u > duplex_read_ids_sorted.txt
 
       echo -e "Sample_name\tSimplex_reads\tDuplex_reads" > simplex_duplex_read_distribution.tsv
 
@@ -415,7 +516,7 @@ then
       # Counting simplex reads
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCounting the number of simplex reads in the dataset...\033[0m\n"
 
-      seqkit seq -n reads_simplex.fastq | tr -d '\r' | LC_ALL=C sort -u > simplex_read_ids_sorted.txt
+      seqkit seq -n reads_simplex.fastq | tr -d '\r' | awk '{print $1}' | LC_ALL=C sort -u > simplex_read_ids_sorted.txt
 
       echo -e "Sample_name\tSimplex_reads" > simplex_read_distribution.tsv
 
@@ -541,6 +642,18 @@ then
         exit;
       fi
    fi
+else
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : The next script of the pipeline to use is \033[1mproname_filter\033[0m.\n\n"
+   echo -ne "\nUsage example:"
+   echo -ne "\n-------------"
+   echo
+   echo "proname_filter \\"
+   echo "  --datatype simplex \\"
+   echo "  --filtminlen 3500 \\"
+   echo "  --filtmaxlen 5000 \\"
+   echo "  --filtminqual 15 \\"
+   echo "  --inputpath RawData"
+   echo
 fi
 
 unset fastq_folder
@@ -560,5 +673,7 @@ unset verbose
 unset sample
 unset samples
 unset primer_error_rate
+unset primer_trimming_mode
+unset DISCARD_UNTRIMMED
 
 

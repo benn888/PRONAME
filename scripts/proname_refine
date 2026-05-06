@@ -12,9 +12,10 @@ Help()
 {
 
 ## Display Help
-   echo -ne "\nThe proname_refine script is the third part of the PRONAME pipeline. This script carries out the clustering of high-quality sequence data coming from proname_filter, \nand the subsequent polishing with a tool dedicated to Nanopore data (i.e. medaka). Optionally, the script can import the generated files into QIIME2 for further processing."
+   echo -ne "\nThe proname_refine script is the third part of the PRONAME pipeline. This script carries out the clustering of high-quality sequence data coming from proname_filter, \n"
+   echo -ne "and the subsequent polishing with a tool dedicated to Nanopore data (i.e. Medaka or Dorado). Optionally, the script can import the generated files into QIIME2 for further processing."
    echo
-   echo -ne "\nSyntax: proname_refine [--clusteringmethod|--clusterid|--clusterthreads|--inputpath|--subsampledreads|--medakabatchsize|--medakathreads|--medakamodel|--chimeramethod|--chimeradb|--qiime2import|--version|--verbose|--help]"
+   echo -ne "\nSyntax: proname_refine [--clusteringmethod|--clusterid|--clusterthreads|--minreadspercluster|--inputpath|--subsampledreads|--polisher|--polisherbatchsize|--polisherthreads|--polishermodel|--chimeramethod|--chimeradb|--qiime2import|--version|--verbose|--help]"
    echo
    echo "Options:"
    echo -ne "\t--clusteringmethod\tThe tool used to cluster sequences. It can be either \"vsearch\" or \"mmseqs2\". VSEARCH offers \n"
@@ -27,22 +28,43 @@ Help()
    echo -ne "\t--clusterthreads\tNumber of threads to use for the clustering step. You can know the number of available threads on your computer \n"
    echo -ne "\t\t\t\tby running the command 'nproc --all' [Default: 2]\n"
    echo
+   echo -ne "\t--minreadspercluster\tMinimum number of reads required for a cluster to be retained.\n"
+   echo -ne "\t\t\t\tClusters containing fewer than this number of reads will be removed before polishing\n"
+   echo -ne "\t\t\t\tand feature table construction. [Default: 2 (only singletons are removed)]\n"
+   echo
    echo -ne "\t--inputpath\t\tPath to the folder containing raw fastq files. This must be the same path than the one provided while \n"
    echo -ne "\t\t\t\trunning proname_import and proname_filter.\n"
    echo
    echo -ne "\t--subsampledreads\tNumber of subsampled reads that will be aligned against the centroid sequence during polishing. [Default: 300]\n"
    echo
-   echo -ne "\t--medakabatchsize\tControls memory use. The default value has been set to 100. If Medaka shows out of memory errors, \n"
-   echo -ne "\t\t\t\tthe batch size should be reduced. [Default: 100]\n"
+   echo -ne "\t--polisher\t\tPolishing engine to use. 'medaka' is recommended for CPU-only or small datasets.\n"
+   echo -ne "\t\t\t\t'dorado' is recommended for larger datasets and when move tables are available in the FASTQ headers.\n"
+   echo -ne "\t\t\t\t[Options: \"medaka\" or \"dorado\", Default: \"medaka\"]\n"
+   echo -ne "\t\t\t\tMove tables will only be present if your reads were basecalled with Dorado using\n"
+   echo -ne "\t\t\t\t'--emit-fastq --emit-moves' and no adapter/primer trimming was performed inside PRONAME.\n"
+   echo -ne "\t\t\t\tIf adapter or primer trimming was done in proname_import, move tables are removed or\n"
+   echo -ne "\t\t\t\tinvalidated and Dorado polishing will effectively run without using moves.\n"
+   echo -ne "\t\t\t\tWhen using Dorado polishing, the polishing model is automatically selected by Dorado\n"
+   echo -ne "\t\t\t\tbased on the tags present in the read headers (propagated from Dorado basecalling).\n"
+   echo -ne "\t\t\t\tThis is mainly true for move tables that must be present in read headers if you want them to be \n"
+   echo -ne "\t\t\t\tused during polishing (*_polish_rl_mv Dorado polishing model).\n"
    echo
-   echo -ne "\t--medakathreads\t\tNumber of threads to use for the polishing step. If running Medaka on a CPU, it is recommended to \n"
+   echo -ne "\t--polisherbatchsize\tControls neural network inference batch size during polishing. Applies to both Medaka and Dorado. \n"
+   echo -ne "\t\t\t\tLarger values increase speed but also memory usage. If Medaka shows out of memory errors, the batch size should \n"
+   echo -ne "\t\t\t\tbe reduced. For Dorado, setting this to 0 enables automatic batch size optimisation based on available hardware.\n"
+   echo -ne "\t\t\t\t[Default: 100 for Medaka, 0 for Dorado]\n"
+   echo
+   echo -ne "\t--polisherthreads\t\tNumber of threads to use for the polishing step. If running Medaka on a CPU, it is recommended to \n"
    echo -ne "\t\t\t\tset this value to the maximum number of available threads. PRONAME will automatically split the polishing process \n"
    echo -ne "\t\t\t\tinto multiple parallel jobs to significantly increase the analysis speed. Each job uses 2 threads for Medaka, with \n"
    echo -ne "\t\t\t\t2 additional threads allocated to each job for parallel overhead. \n"
    echo -ne "\t\t\t\tIf running on a GPU, this setting has little impact, as the main computation is handled by PyTorch and CUDA. [Default: 4]\n"
    echo
-   echo -ne "\t--medakamodel\t\tBasecalling model used to generate raw fastq files. This model will be used by medaka to polish data.\n"
-   echo -ne "\t\t\t\tThe list of available models can be found by running 'medaka tools list\_models'\n"
+   echo -ne "\t--polishermodel\t\tModel name to use for consensus polishing when '--polisher medaka'.\n"
+   echo -ne "\t\t\t\tThis should be a valid Medaka model name (e.g. r1041_e82_400bps_sup_v5.2.0);\n"
+   echo -ne "\t\t\t\tAvailable Medaka models can be listed using 'medaka tools list_models'.\n"
+   echo -ne "\t\t\t\tWhen '--polisher dorado' is used, this argument is ignored: Dorado selects the polishing\n"
+   echo -ne "\t\t\t\tmodel automatically from the read tags in the headers.\n"
    echo
    echo -ne "\t--chimeramethod\t\tSpecify the chimera detection method: \"ref\" (reference-based) or \"denovo\" (de novo detection). [Default: \"ref\"]\n"
    echo
@@ -69,7 +91,15 @@ Help()
    echo "proname_refine \\"
    echo "  --clusterid 0.90 \\"
    echo "  --inputpath RawData \\"
-   echo "  --medakamodel r1041_e82_400bps_sup_v5.2.0 \\"
+   echo "  --polisher medaka \\"
+   echo "  --polishermodel r1041_e82_400bps_sup_v5.2.0 \\"
+   echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
+   echo "  --qiime2import yes"
+   echo
+   echo "proname_refine \\"
+   echo "  --clusterid 0.90 \\"
+   echo "  --inputpath RawData \\"
+   echo "  --polisher dorado \\"
    echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
    echo "  --qiime2import yes"
    echo
@@ -77,18 +107,20 @@ Help()
 
 Version()
 {
-    echo -ne "proname_refine from the PRONAME pipeline, version 2.1.4\n\n"
+    echo -ne "proname_refine from the PRONAME pipeline, version 2.2.0\n\n"
 }
 
 
 # Variable default values
 clustering_threads="2"
 n_subsampled_reads="300"
-medaka_batchsize="100"
-medaka_threads="4"
+polisher_batchsize=""
+polisher_threads="4"
+polisher="medaka"
 delete_non_essential="no"
 clustering_method="vsearch"
 chimera_method="ref"
+min_reads_per_cluster="2"
 verbose=false
 
 
@@ -103,14 +135,16 @@ for arg in "$@"; do
     '--clusterthreads')     set -- "$@" '-b'   ;;
     '--inputpath')          set -- "$@" '-c'   ;;
     '--subsampledreads')    set -- "$@" '-d'   ;;
-    '--medakabatchsize')    set -- "$@" '-e'   ;;
-    '--medakathreads')      set -- "$@" '-f'   ;;
-    '--medakamodel')        set -- "$@" '-g'   ;;
+    '--polisherbatchsize')  set -- "$@" '-e'   ;;
+    '--polisherthreads')    set -- "$@" '-f'   ;;
+    '--polishermodel')      set -- "$@" '-g'   ;;
     '--chimeradb')          set -- "$@" '-i'   ;;
     '--qiime2import')       set -- "$@" '-j'   ;;
     '--clusteringmethod')   set -- "$@" '-k'   ;;
     '--chimeramethod')      set -- "$@" '-l'   ;;
     '--deletefiles')        set -- "$@" '-r'   ;;
+    '--polisher')           set -- "$@" '-p'   ;;
+    '--minreadspercluster') set -- "$@" '-m'   ;;
     '--verbose')            verbose=true ;;
     *)                      set -- "$@" "$arg" ;;
   esac
@@ -119,7 +153,7 @@ done
 
 # Parse short options
 
-while getopts :hva:b:c:d:e:f:g:i:j:k:l:r: flag
+while getopts :hva:b:c:d:e:f:g:i:j:k:l:r:p:m: flag
 do
     case "${flag}" in
         h) Help
@@ -130,14 +164,16 @@ do
         b) clustering_threads=${OPTARG};;
         c) fastq_folder=${OPTARG};;
         d) n_subsampled_reads=${OPTARG};;
-        e) medaka_batchsize=${OPTARG};;
-        f) medaka_threads=${OPTARG};;
-        g) medaka_model=${OPTARG};;
+        e) polisher_batchsize=${OPTARG};;
+        f) polisher_threads=${OPTARG};;
+        g) polisher_model=${OPTARG};;
         i) chimera_db=${OPTARG};;
         j) qiime2_import=${OPTARG};;
         k) clustering_method=${OPTARG};;
         l) chimera_method=${OPTARG};;
         r) delete_non_essential=${OPTARG};;
+        p) polisher=${OPTARG};;
+        m) min_reads_per_cluster=${OPTARG};;
         \?) # Invalid option
                 echo -ne "Error: Invalid option\n"
                 echo -ne "Please consult the help menu with 'proname_refine --help'\n"
@@ -148,9 +184,25 @@ done
 
 # Mandatory arguments
 
-if [ ! "$clustering_id" ] || [ ! "$fastq_folder" ] || [ ! "$medaka_model" ] || [ ! "$qiime2_import" ]
+if [ ! "$clustering_id" ] || [ ! "$fastq_folder" ] || [ ! "$qiime2_import" ]
 then
-   echo -ne "\n\033[31m\033[1mError: arguments --clusterid, --inputpath, --medakamodel and --qiime2import must be provided\033[0m\n\n"
+   echo -ne "\n\033[31m\033[1mError: arguments --clusterid, --inputpath and --qiime2import must be provided\033[0m\n\n"
+   echo -ne "Please consult the help menu with 'proname_refine --help'\n"
+   exit 1
+fi
+
+# Mandatory model only for Medaka
+if [ "$polisher" = "medaka" ] && [ -z "$polisher_model" ]
+then
+   echo -ne "\n\033[31m\033[1mError: the argument --polishermodel must be provided when '--polisher medaka' is used.\033[0m\n\n"
+   echo -ne "Please consult the help menu with 'proname_refine --help'\n"
+   exit 1
+fi
+
+# Validate polisher
+if [[ "$polisher" != "medaka" && "$polisher" != "dorado" ]]
+then
+   echo -ne "\n\033[31m\033[1mError: the value of --polisher must be 'medaka' or 'dorado'.\033[0m\n\n"
    echo -ne "Please consult the help menu with 'proname_refine --help'\n"
    exit 1
 fi
@@ -176,6 +228,24 @@ then
    exit 1
 fi
 
+# Validate min_reads_per_cluster
+if ! [[ "$min_reads_per_cluster" =~ ^[0-9]+$ ]] || [ "$min_reads_per_cluster" -lt 1 ]
+then
+   echo -ne "\n\033[31m\033[1mError: the value of --minreadspercluster must be a positive integer (>= 1).\033[0m\n\n"
+   echo -ne "Please consult the help menu with 'proname_refine --help'\n"
+   exit 1
+fi
+
+# Set default polisher batchsize depending on the selected polisher
+if [ -z "$polisher_batchsize" ]
+then
+   if [ "$polisher" = "medaka" ]
+   then
+      polisher_batchsize="100"
+   else
+      polisher_batchsize="0"
+   fi
+fi
 
 # Define exec_cmd function for conditional verbosity
 exec_cmd() {
@@ -185,6 +255,50 @@ exec_cmd() {
     eval "$@" >/dev/null 2>&1
   fi
 }
+
+# Restart-safe cleanup (handles failed runs)
+cleanup_failed_run_artifacts() {
+  local cm="${clustering_method}"
+  local pol="${polisher}"
+  local d="${cm}_clusters"
+
+  # Nothing to do if no clusters dir
+  [ -d "$d" ] || return 0
+
+  echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Detected previous artifacts in ${d}. Cleaning intermediate outputs for a safe restart...\n"
+
+  # 1) Always remove transient files produced during polishing/subsampling
+  rm -f cluster_ids.txt 2>/dev/null
+  rm -f "${d}/read_to_cluster.tsv" 2>/dev/null
+  rm -f "${d}"/subreads_*.fastq 2>/dev/null
+
+  # 2) Remove partial polish outputs for both polishers
+  find "${d}" -maxdepth 1 -type d -name 'medaka_*' -exec rm -rf {} +
+  find "${d}" -maxdepth 1 -type d -name 'dorado_*' -exec rm -rf {} +
+  find "${d}" -maxdepth 1 -type f -name 'dorado_*.sorted.bam' -delete
+  find "${d}" -maxdepth 1 -type f -name 'dorado_*.sorted.bam.bai' -delete
+  find "${d}" -maxdepth 1 -type d -name 'tmp_dorado_*' -exec rm -rf {} +
+
+  # 3) Remove final outputs that could be inconsistent from a partial run
+  rm -f rep_seqs.fasta rep_table.tsv rep_table.qza rep_seqs.qza sample_metadata.tsv 2>/dev/null
+  rm -f Global_table polisher_consensus_seqs.fasta clusters_seqids_linking_table 2>/dev/null
+  rm -f rep_table.biom 2>/dev/null
+  rm -rf cluster_seq_count_folder 2>/dev/null
+  rm -f consensus_paths.txt seq_count_files.txt 2>/dev/null
+
+  echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Cleanup completed.\n"
+}
+
+# If the script fails, keep the clustering checkpoint so we can restart from clustering next time
+on_exit() {
+  local code=$?
+  if [ $code -ne 0 ]
+  then
+    echo -e "\n[ERROR] proname_refine aborted (exit code: $code). Intermediate files were left for debugging, but clustering checkpoint is preserved for restart.\n" >&2
+  fi
+}
+trap on_exit EXIT
+
 
 ######################################################
 
@@ -199,7 +313,11 @@ then
    for file in ${fastq_folder}/*.fastq
    do
       sample=$(basename "$file" .fastq)
-      awk 'NR == 1 || (NR-1) % 4 == 0 {sub(/^@/,""); print $0}' "$file" > Rawseqids/rawseqids_${sample}
+      awk 'NR == 1 || (NR-1) % 4 == 0 {
+            sub(/^@/, "", $0)
+            split($0, a, /[ \t]+/)
+            print a[1]
+        }' "$file" > Rawseqids/rawseqids_${sample}
    done
 
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead distribution recorded! \033[0m\n"
@@ -223,166 +341,238 @@ fi
 ## File from proname_filter with simplex and duplex data
 if [ -f "HQ/HQ_simplex_duplex_seqs.fastq" ]
 then
-  HQ_fastq="HQ/HQ_simplex_duplex_seqs.fastq"
+   HQ_fastq="HQ/HQ_simplex_duplex_seqs.fastq"
 fi
 
 ## Checking that ${HQ_fastq} is not empty
 
 if [ -z "${HQ_fastq:-}" ] || [ ! -s "${HQ_fastq}" ]
 then
-  echo -e "\n\033[31m\033[1mError: No HQ input found. Did proname_filter complete?\033[0m"
-  echo "Expected one of: HQ/HQ_simplex_seqs.fastq | HQ/HQ_duplex_seqs.fastq | HQ/HQ_simplex_duplex_seqs.fastq"
-  exit 1
+   echo -e "\n\033[31m\033[1mError: No HQ input found. Did proname_filter complete?\033[0m"
+   echo "Expected one of: HQ/HQ_simplex_seqs.fastq | HQ/HQ_duplex_seqs.fastq | HQ/HQ_simplex_duplex_seqs.fastq"
+   exit 1
+fi
+
+# Dorado-only checks
+if [ "$polisher" = "dorado" ]
+then
+   # Detect presence of move tables (mv:B:c,...) in HQ FASTQ headers
+   if grep -m1 "mv:B:[cC]," "${HQ_fastq}" >/dev/null 2>&1
+   then
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Move tables detected in HQ FASTQ headers (${HQ_fastq}).\n"
+   else
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : No move tables detected in HQ FASTQ headers (${HQ_fastq}).\n"
+   fi
+
+   # Global RG (principal strategy): force a unique RG for all reads used by Dorado
+   GLOBAL_RG=$(awk 'BEGIN{FS="[ \t]"} /^@/{for(i=1;i<=NF;i++) if($i~/^RG:Z:/){sub(/^RG:Z:/,"",$i); print $i; exit}}' "$HQ_fastq")
+
+   if [ -z "$GLOBAL_RG" ]
+   then
+      echo -e "\n\033[31m\033[1mError: could not find RG:Z: in the first read header of ${HQ_fastq}. Cannot run Dorado polish.\033[0m\n"
+      exit 1
+  fi
+
+  # Force a persistent models directory for Dorado
+  DORADO_MODELS_DIR="$PWD/dorado_models"
+  mkdir -p "${DORADO_MODELS_DIR}"
 fi
 
 
-# Removing items from a potential previous failed run
+# Clustering checkpoint handling
+cluster_checkpoint=".proname_refine_clustering_done"
 
-rm -rf vsearch_clusters
-rm -rf mmseqs2_clusters
-rm -f cluster*_seq_count
-
-# Clustering reads into OTUs
-
-echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mClustering reads...\033[0m\n"
-
-if [ ${clustering_method} = "vsearch" ]
+if [ -f "${cluster_checkpoint}" ] && [ -d "${clustering_method}_clusters" ]
 then
-   mkdir vsearch_clusters
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Clustering step already completed in a previous run (checkpoint found: ${cluster_checkpoint}). Skipping clustering.\n"
+   cleanup_failed_run_artifacts
 
-   vsearch \
-     --cluster_fast ${HQ_fastq} \
-     --id ${clustering_id} \
-     --strand both \
-     --threads ${clustering_threads} \
-     --clusters vsearch_clusters/cluster
-
-   exec_cmd "remove_singletons.py vsearch_clusters"
-
-
-   # Recording clustered reads according to their sample provenance
-
-   cluster_reads_count.py "${clustering_method}_clusters" "${fastq_folder}" "Rawseqids"
-
-   if find vsearch_clusters -name 'cluster*' | grep -q . 1> /dev/null 2>&1
+   if ! find . -maxdepth 1 -type f -name "*_seq_count" -print -quit | grep -q .
    then
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead clustering completed! \033[0m\n"
-   else
-      echo -ne "\n\033[31m\033[1mError: read clustering failed. \033[0m\n\n"
-      echo -ne "Please consult the help menu.\n"
-      exit;
+      echo -e "\n\033[31m\033[1mError: No *_seq_count files found but clustering checkpoint exists.\033[0m"
+      echo "If clustering was skipped, these files must be present to build the feature table."
+      echo "Fix: remove ${cluster_checkpoint} and rerun to force clustering, or restore *_seq_count files."
+      exit 1
    fi
 
-   # Splitting clusters into 2 files
-
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mSplitting clusters into two files...\033[0m\n"
-
-   for i in vsearch_clusters/*;do seqkit split -p 2 $i;done
-
-   if find vsearch_clusters -name '*split*' | grep -q . 1> /dev/null 2>&1
+   if ! find "${clustering_method}_clusters" -maxdepth 1 -type f -name "subreads_*.fasta" -print -quit | grep -q .
    then
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mSplitting completed! \033[0m\n"
-   else
-      echo -ne "\n\033[31m\033[1mError: cluster splitting failed. \033[0m\n\n"
-      echo -ne "Please consult the help menu.\n"
-      exit;
+      echo -e "\n\033[31m\033[1mError: checkpoint exists but no subreads_*.fasta found.\033[0m"
+      echo "Fix: remove ${cluster_checkpoint} and rerun to regenerate subreads."
+      exit 1
    fi
 
-   # Extracting centroid sequences
+else
+   # Removing items from a potential previous failed run
+   rm -rf vsearch_clusters
+   rm -rf mmseqs2_clusters
+   find . -maxdepth 1 -type f -name 'cluster*_seq_count' -delete
 
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mExtracting centroid sequences...\033[0m\n"
+   # Clustering reads into OTUs
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mClustering reads...\033[0m\n"
 
-   for i in $(ls vsearch_clusters | grep "split" | cut -d "." -f 1)
-   do
-      seqkit range -r -1:-1 vsearch_clusters/${i}.split/${i}.part_001 -w 0 -o vsearch_clusters/centroid_${i}.fasta
+   if [ ${clustering_method} = "vsearch" ]
+   then
+      mkdir vsearch_clusters
+
+      vsearch \
+        --cluster_fast ${HQ_fastq} \
+        --id ${clustering_id} \
+        --strand both \
+        --threads ${clustering_threads} \
+        --clusters vsearch_clusters/cluster
+
+      exec_cmd "remove_singletons.py vsearch_clusters --min-reads ${min_reads_per_cluster}"
+
+
+      # Recording clustered reads according to their sample provenance
+      cluster_reads_count.py "${clustering_method}_clusters" "${fastq_folder}" "Rawseqids"
+
+      if find vsearch_clusters -name 'cluster*' | grep -q . 1> /dev/null 2>&1
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead clustering completed! \033[0m\n"
+      else
+         echo -ne "\n\033[31m\033[1mError: read clustering failed. \033[0m\n\n"
+         echo -ne "Please consult the help menu.\n"
+         exit;
+      fi
+
+      # Splitting clusters into 2 files
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mSplitting clusters into two files...\033[0m\n"
+
+      for i in vsearch_clusters/*;do seqkit split -p 2 $i;done
+
+      if find vsearch_clusters -name '*split*' | grep -q . 1> /dev/null 2>&1
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mSplitting completed! \033[0m\n"
+      else
+         echo -ne "\n\033[31m\033[1mError: cluster splitting failed. \033[0m\n\n"
+         echo -ne "Please consult the help menu.\n"
+         exit;
+      fi
+
+      # Extracting centroid sequences
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mExtracting centroid sequences...\033[0m\n"
+
+      for i in $(ls vsearch_clusters | grep "split" | cut -d "." -f 1)
+      do
+         seqkit range -r -1:-1 vsearch_clusters/${i}.split/${i}.part_001 -w 0 -o vsearch_clusters/centroid_${i}.fasta
+      done
+
+      if find vsearch_clusters -name 'centroid*' | grep -q . 1> /dev/null 2>&1
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mExtraction completed! \033[0m\n"
+      else
+         echo -ne "\n\033[31m\033[1mError: centroid extraction failed. \033[0m\n\n"
+         echo -ne "Please consult the help menu.\n"
+         exit;
+      fi
+   elif [ ${clustering_method} = "mmseqs2" ]
+   then
+      mkdir mmseqs2_clusters
+
+      seqkit fq2fa "$HQ_fastq" -o "${HQ_fastq%.fastq}.fasta"
+
+      export HQ_fastq="${HQ_fastq%.fastq}.fasta"
+
+      mmseqs easy-cluster "${HQ_fastq}" output tmp --min-seq-id ${clustering_id} --threads ${clustering_threads} 2> /dev/null
+
+      # Extracting clusters and centroid sequences
+      extract_mmseqs2_clusters.py
+
+      # Removing singletons
+      exec_cmd "remove_singletons.py mmseqs2_clusters --min-reads ${min_reads_per_cluster}"
+
+      # Recording clustered reads according to their sample provenance
+      cluster_reads_count.py "${clustering_method}_clusters" "${fastq_folder}" "Rawseqids"
+
+      if find mmseqs2_clusters -name 'cluster*' | grep -q . 1> /dev/null 2>&1
+      then
+         echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead clustering completed! \033[0m\n"
+      else
+         echo -ne "\n\033[31m\033[1mError: read clustering failed. \033[0m\n\n"
+         echo -ne "Please consult the help menu.\n"
+         exit;
+      fi
+      rm -r tmp
+      rm output_*
+
+      # Restore HQ_fastq as a FASTQ file for Dorado
+      HQ_fastq="${HQ_fastq%.fasta}.fastq"
+   fi
+
+   # Randomly subsampling N reads
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mSubsampling reads in each cluster...\033[0m\n"
+
+   find "${clustering_method}_clusters" -maxdepth 1 -type f -name "centroid_*.fasta" -print0 \
+   | while IFS= read -r -d '' centroid
+     do
+       i="$(basename "$centroid")"
+       i="${i#centroid_}"
+       i="${i%.fasta}"
+
+       seqkit shuffle -s 23 "${clustering_method}_clusters/${i}" 2>/dev/null \
+         | seqkit head -n "${n_subsampled_reads}" -w 0 -o "${clustering_method}_clusters/subreads_${i}.fasta"
    done
 
-   if find vsearch_clusters -name 'centroid*' | grep -q . 1> /dev/null 2>&1
+
+   if find ${clustering_method}_clusters -name 'subreads*' | grep -q . 1> /dev/null 2>&1
    then
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mExtraction completed! \033[0m\n"
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mSubsampling completed! \033[0m\n"
    else
-      echo -ne "\n\033[31m\033[1mError: centroid extraction failed. \033[0m\n\n"
+      echo -ne "\n\033[31m\033[1mError: read subsampling failed. \033[0m\n\n"
       echo -ne "Please consult the help menu.\n"
       exit;
    fi
-elif [ ${clustering_method} = "mmseqs2" ]
-then
-   mkdir mmseqs2_clusters
 
-   seqkit fq2fa "$HQ_fastq" -o "${HQ_fastq%.fastq}.fasta"
-
-   export HQ_fastq="${HQ_fastq%.fastq}.fasta"
-
-   mmseqs easy-cluster "${HQ_fastq}" output tmp --min-seq-id ${clustering_id} --threads ${clustering_threads} 2> /dev/null
-
-   # Extracting clusters and centroid sequences
-
-   extract_mmseqs2_clusters.py
-
-   # Removing singletons
-
-   exec_cmd "remove_singletons.py mmseqs2_clusters"
-
-   # Recording clustered reads according to their sample provenance
-
-   cluster_reads_count.py "${clustering_method}_clusters" "${fastq_folder}" "Rawseqids"
-
-   if find mmseqs2_clusters -name 'cluster*' | grep -q . 1> /dev/null 2>&1
+   # Injecting mv tag for medaka model compatibility
+   if [ "$polisher" = "medaka" ]
    then
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mRead clustering completed! \033[0m\n"
-   else
-      echo -ne "\n\033[31m\033[1mError: read clustering failed. \033[0m\n\n"
-      echo -ne "Please consult the help menu.\n"
-      exit;
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Injecting mv tag for medaka model compatibility...\n"
+
+      for fasta in ${clustering_method}_clusters/subreads_cluster*.fasta \
+                   ${clustering_method}_clusters/centroid_*.fasta
+      do
+         [ -f "$fasta" ] || continue
+
+         awk -v model="$polisher_model" '
+            /^>/ {
+               if ($0 !~ /\tmv:/) {
+                  print $0 "\tmv:" model
+               } else {
+                  print $0
+               }
+               next
+            }
+            { print }
+         ' "$fasta" > "${fasta}.tmp" && mv "${fasta}.tmp" "$fasta"
+      done
    fi
-   rm -r tmp
-   rm output_*
-fi
 
-# Randomly subsampling N reads
-
-echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mSubsampling reads in each cluster...\033[0m\n"
-
-for i in $(ls ${clustering_method}_clusters | grep "centroid" | cut -d '_' -f 2 | cut -d '.' -f 1)
-do
-   seqkit shuffle -s 23 ${clustering_method}_clusters/$i 2>/dev/null | seqkit head -n ${n_subsampled_reads} -w 0 -o ${clustering_method}_clusters/subreads_${i}.fasta
-done
-
-# Adding medaka model in sequence headers
-for fasta in ${clustering_method}_clusters/{subreads_cluster*.fasta,centroid_*.fasta}
-do
-   sed -i "s/^>\(.*\)/>\1\tmv:${medaka_model}/" "$fasta"
-done
-
-if find ${clustering_method}_clusters -name 'subreads*' | grep -q . 1> /dev/null 2>&1
-then
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mSubsampling completed! \033[0m\n"
-else
-   echo -ne "\n\033[31m\033[1mError: read subsampling failed. \033[0m\n\n"
-   echo -ne "Please consult the help menu.\n"
-   exit;
+   # If we reach this point without exiting, the clustering is considered successful
+   touch "${cluster_checkpoint}"
 fi
 
 
 # Defining the global function for parallel polishing
 medaka_polishing() {
-   local medaka_threads="${medaka_threads}"
-   local medaka_model="${medaka_model}"
-   local medaka_batchsize="${medaka_batchsize}"
+   local polisher_threads="${polisher_threads}"
+   local polisher_model="${polisher_model}"
+   local polisher_batchsize="${polisher_batchsize}"
    local clustering_method="${clustering_method}"
 
    # Generating consensus sequences
 
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCarrying out medaka polishing to generate consensus sequences...\033[0m\n"
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mPerforming Medaka polishing to generate consensus sequences...\033[0m\n"
 
    # Computing the number of parallel jobs
-   local PARALLEL_JOBS=$(( medaka_threads / 4 ))
+   local PARALLEL_JOBS=$(( polisher_threads / 4 ))
 
    if [ "${PARALLEL_JOBS}" -lt 1 ]
    then
       PARALLEL_JOBS=1
    fi
-   echo "Launching polishing in parallel using ${PARALLEL_JOBS} jobs (4 threads per job)."
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Launching polishing in parallel using ${PARALLEL_JOBS} jobs (4 threads per job)."
 
    # Generating cluster IDs
    find ${clustering_method}_clusters -type f -name "subreads_cluster*.fasta" | \
@@ -395,8 +585,8 @@ medaka_polishing() {
    fi
 
    # Exporting variables for parallel
-   export medaka_model
-   export medaka_batchsize
+   export polisher_model
+   export polisher_batchsize
    export clustering_method
 
    # Polishing function
@@ -406,53 +596,300 @@ medaka_polishing() {
       medaka_consensus \
          -d ${clustering_method}_clusters/centroid_${cluster_id}.fasta \
          -i ${clustering_method}_clusters/subreads_${cluster_id}.fasta \
-         -b "${medaka_batchsize}" \
+         -b "${polisher_batchsize}" \
          -t 2 \
-         -m "${medaka_model}" \
+         -m "${polisher_model}" \
          -o ${clustering_method}_clusters/medaka_${cluster_id}
 
    }
    export -f polish_cluster
 
-   parallel -j "${PARALLEL_JOBS}" polish_cluster :::: cluster_ids.txt
+   # Parallel polishing, stop as soon as one cluster fails
+   if ! parallel --jobs "${PARALLEL_JOBS}" --halt now,fail=1 polish_cluster :::: cluster_ids.txt
+   then
+      echo "[ERROR] Medaka polishing failed for at least one cluster." >&2
+      rm -f cluster_ids.txt
+      exit 1
+   fi
 
-   rm cluster_ids.txt
+   rm -f cluster_ids.txt
 }
 
+dorado_polishing() {
+   local polisher_threads="${polisher_threads}"
+   local clustering_method="${clustering_method}"
+   local draft_dir="${clustering_method}_clusters"
+   local hq_fastq="${HQ_fastq}"
+
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mPerforming Dorado polishing cluster by cluster...\033[0m\n"
+
+   # Derive cluster IDs from centroid_*.fasta
+   find "${draft_dir}" -maxdepth 1 -type f -name 'centroid_*.fasta' \
+      -exec basename {} \; | sed 's/^centroid_//; s/\.fasta$//' > cluster_ids.txt
+
+   if [ ! -s cluster_ids.txt ]
+   then
+      echo "[ERROR] No centroid_*.fasta found in ${draft_dir}" >&2
+      rm -f cluster_ids.txt
+      exit 1
+   fi
+
+   # Thread allocation: similar spirit as Medaka
+   # 4 threads per job: 2 for Dorado (aligner + polish), 2 for samtools
+   local THREADS_PER_JOB=4
+   local DORADO_THREADS_PER_JOB=2
+   local SAMTOOLS_THREADS_PER_JOB=2
+
+   local JOBS=$(( polisher_threads / THREADS_PER_JOB ))
+   if [ "${JOBS}" -lt 1 ]
+   then
+      JOBS=1
+   fi
+
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Launching Dorado polishing in parallel using ${JOBS} jobs (${DORADO_THREADS_PER_JOB} threads for Dorado and ${SAMTOOLS_THREADS_PER_JOB} for samtools per job).\n"
+
+   # One-pass fastq extraction
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Building read -> cluster map for one-pass FASTQ extraction...\n"
+
+   reads_map="${draft_dir}/read_to_cluster.tsv"
+   : > "$reads_map"
+
+   # Create mapping: read_id -> cluster_id
+   while IFS= read -r cid; do
+      subreads_fa="${draft_dir}/subreads_${cid}.fasta"
+      if [ -s "$subreads_fa" ]; then
+         # Get read IDs from fasta headers; keep only first field
+         seqkit seq -n "$subreads_fa" | awk -v c="$cid" '{print $1 "\t" c}' >> "$reads_map"
+      fi
+   done < cluster_ids.txt
+
+   if [ ! -s "$reads_map" ]; then
+      echo "[ERROR] read_to_cluster map is empty (no subreads_*.fasta?)" >&2
+      exit 1
+   fi
+
+   # Extract fastq once
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : One-pass extraction of FASTQ reads from ${HQ_fastq}...\n"
+
+   awk -v mapfile="$reads_map" -v outdir="$draft_dir" -v rg="$GLOBAL_RG" '
+      BEGIN {
+         FS="[ \t]";
+         # Load mapping read_id -> cluster
+         while ((getline < mapfile) > 0) {
+            id=$1; c=$2;
+            if (id != "" && c != "") m[id]=c;
+         }
+         close(mapfile);
+      }
+      /^@/ {
+         header=$0;
+         getline seq;
+         getline plus;
+         getline qual;
+
+         # Replace or add RG:Z: (global RG strategy)
+         if (header ~ /RG:Z:/) {
+            sub(/RG:Z:[^\t ]+/, "RG:Z:" rg, header);
+         } else {
+            header = header "\tRG:Z:" rg;
+         }
+
+         # Extract read id (first token after @, before space/tab)
+         rid=substr(header,2);
+         split(rid,a,/[ \t]+/);
+         rid=a[1];
+
+         c=m[rid];
+         if (c != "") {
+            f = outdir "/subreads_" c ".fastq";
+            print header >> f;
+            print seq    >> f;
+            print plus   >> f;
+            print qual   >> f;
+
+            # Avoid too many open file descriptors
+            # (close after each record; a bit slower but safe)
+            close(f);
+         }
+      }
+   ' "$hq_fastq"
+
+   # Basic sanity: ensure at least one per-cluster fastq exists
+   if ! find "${draft_dir}" -maxdepth 1 -type f -name 'subreads_*.fastq' -print -quit | grep -q .; then
+     echo "[ERROR] One-pass FASTQ extraction produced no subreads_*.fastq files." >&2
+     exit 1
+   fi
+
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : One-pass FASTQ extraction done.\n"
+
+
+   # ---------------------------
+   # Dorado warm-up (download/prepare the resolved model once, BEFORE running in parallel)
+   # ---------------------------
+   warmup_id="$(head -n 1 cluster_ids.txt)"
+   if [ -n "${warmup_id}" ]; then
+      warmup_draft="${draft_dir}/centroid_${warmup_id}.fasta"
+      warmup_reads="${draft_dir}/subreads_${warmup_id}.fastq"
+      warmup_bam="${draft_dir}/dorado_${warmup_id}.warmup.sorted.bam"
+      warmup_out="${draft_dir}/dorado_${warmup_id}.warmup_out"
+
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Dorado warm-up on cluster ${warmup_id} (models dir: ${DORADO_MODELS_DIR})...\n"
+
+      dorado aligner --threads "${DORADO_THREADS_PER_JOB}" "${warmup_draft}" "${warmup_reads}" \
+        | samtools sort --threads "${SAMTOOLS_THREADS_PER_JOB}" -o "${warmup_bam}"
+      samtools index "${warmup_bam}"
+
+      mkdir -p "${warmup_out}"
+      dorado polish \
+         --models-directory "${DORADO_MODELS_DIR}" \
+         --threads "${DORADO_THREADS_PER_JOB}" \
+         --batchsize "${polisher_batchsize}" \
+         "${warmup_bam}" "${warmup_draft}" \
+         -o "${warmup_out}"
+
+      # cleanup warm-up artifacts (keep models dir!)
+      rm -f "${warmup_bam}" "${warmup_bam}.bai" 2>/dev/null
+      rm -rf "${warmup_out}" 2>/dev/null
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Dorado warm-up done.\n"
+   fi
+
+
+   dorado_polish_cluster() {
+      local cluster_id="$1"
+      local draft="${draft_dir}/centroid_${cluster_id}.fasta"
+      local reads_fastq="${draft_dir}/subreads_${cluster_id}.fastq"
+      local sorted_bam="${draft_dir}/dorado_${cluster_id}.sorted.bam"
+      local outdir="${draft_dir}/dorado_${cluster_id}"
+      local job_tmp="${draft_dir}/tmp_dorado_${cluster_id}"
+
+      if [ ! -s "$reads_fastq" ]
+      then
+         echo "[WARNING] Missing or empty $reads_fastq for cluster ${cluster_id}, skipping." >&2
+         return 0
+      fi
+
+      # Alignment + sorted BAM, with controlled threads
+      dorado aligner --threads "${DORADO_THREADS_PER_JOB}" "$draft" "$reads_fastq" \
+        | samtools sort --threads "${SAMTOOLS_THREADS_PER_JOB}" -o "$sorted_bam"
+
+      samtools index "$sorted_bam"
+
+      # Dorado polishing (threads limited) in a cluster-specific temporary working directory
+      mkdir -p "$outdir"
+      mkdir -p "$job_tmp"
+
+      local abs_job_tmp
+      local abs_sorted_bam
+      local abs_draft
+      local abs_outdir
+
+      abs_job_tmp="$(readlink -f "$job_tmp")"
+      abs_sorted_bam="$(readlink -f "$sorted_bam")"
+      abs_draft="$(readlink -f "$draft")"
+      abs_outdir="$(readlink -f "$outdir")"
+
+      (
+         trap 'rm -rf "$abs_job_tmp"' EXIT
+         cd "$abs_job_tmp" || exit 1
+         dorado polish \
+            --models-directory "${DORADO_MODELS_DIR}" \
+            --threads "${DORADO_THREADS_PER_JOB}" \
+            --batchsize "${polisher_batchsize}" \
+            "$abs_sorted_bam" "$abs_draft" \
+            -o "$abs_outdir"
+      ) || return 1
+
+      # Making sure consensus is named as consensus.fasta
+      if [ -f "${outdir}/consensus.fasta" ]
+      then
+         :
+      elif [ -f "${outdir}/consensus.fastq" ]
+      then
+         seqkit fq2fa "${outdir}/consensus.fastq" > "${outdir}/consensus.fasta"
+      else
+         echo "[ERROR] No consensus output found for cluster ${cluster_id}" >&2
+         return 1
+      fi
+   }
+
+   export -f dorado_polish_cluster
+   export draft_dir hq_fastq DORADO_THREADS_PER_JOB SAMTOOLS_THREADS_PER_JOB polisher_batchsize GLOBAL_RG DORADO_MODELS_DIR
+
+   # Parallel polishing, stop as soon as one cluster fails
+   if ! parallel --jobs "${JOBS}" --halt now,fail=1 dorado_polish_cluster :::: cluster_ids.txt
+   then
+      echo "[ERROR] Dorado polishing failed for at least one cluster." >&2
+      rm -f cluster_ids.txt
+      exit 1
+   fi
+
+   rm -f cluster_ids.txt
+}
+
+
 # Calling polishing function
-medaka_polishing
+
+if [ "$polisher" = "medaka" ]
+then
+   medaka_polishing
+elif [ "$polisher" = "dorado" ]
+then
+   dorado_polishing
+fi
 
 #############################
 
-if find ${clustering_method}_clusters -name 'medaka*' | grep -q . 1> /dev/null 2>&1
+if [ "$polisher" = "medaka" ]
 then
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mPolishing completed! \033[0m\n"
+   if find ${clustering_method}_clusters -name 'medaka*' | grep -q . 1> /dev/null 2>&1
+   then
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mMedaka polishing completed! \033[0m\n"
+   else
+      echo -ne "\n\033[31m\033[1mError: Medaka polishing failed. \033[0m\n\n"
+      echo -ne "Please consult the help menu.\n"
+      exit 1
+   fi
 else
-   echo -ne "\n\033[31m\033[1mError: polishing failed. \033[0m\n\n"
-   echo -ne "Please consult the help menu.\n"
-   exit;
+   if find "${clustering_method}_clusters" -path "${clustering_method}_clusters/dorado_*/consensus.fasta" | grep -q . 1> /dev/null 2>&1
+   then
+      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mDorado polishing completed! \033[0m\n"
+   else
+      echo -ne "\n\033[31m\033[1mError: Dorado polishing failed (no consensus.fasta found).\033[0m\n\n"
+      echo -ne "Please consult the help menu.\n"
+      exit 1
+   fi
 fi
 
 # Creating a linking table between clusters and their corresponding representative seqid
 
 export clustering_method
-export medaka_threads
+export polisher_threads
+export polisher
 
-find "${clustering_method}_clusters" -type f -name "consensus.fasta" -path "*medaka_*" -print0 > consensus_paths.txt
+find "${clustering_method}_clusters" -type f -name "consensus.fasta" -path "*${polisher}_*" -print0 > consensus_paths.txt
 
-if ! [ -s consensus_paths.txt ]; then
-    echo "[ERROR] No medaka consensus.fasta found under ${clustering_method}_clusters/medaka_*/" >&2
+if ! [ -s consensus_paths.txt ]
+then
+    echo "[ERROR] No ${polisher} consensus.fasta found under ${clustering_method}_clusters/${polisher}_*/" >&2
     exit 1
 fi
 
-parallel -0 --jobs "$medaka_threads" --no-run-if-empty --halt now,fail=1 \
-  'dir="{//}"; base="${dir##*/}"; id="${base#medaka_}"; \
+parallel -0 --jobs "$polisher_threads" --no-run-if-empty --halt now,fail=1 \
+  'dir="{//}"; base="${dir##*/}"; \
+   # base is e.g. medaka_cluster1 or dorado_cluster1
+   id="${base#*_}"; \
    rep=$(awk '\''BEGIN{rc=1} /^>/{sub(/^>/,""); print $1; rc=0; exit} END{exit rc}'\'' "{}") || exit 2; \
    printf "%s\t%s\n" "$id" "$rep"' \
 :::: consensus_paths.txt > clusters_seqids_linking_table
 
 rm -f consensus_paths.txt
 
+# Safety: ensure seq_count files exist when clustering was skipped
+if ! find . -maxdepth 1 -type f -name "*_seq_count" -print -quit | grep -q .; then
+  echo -e "\n\033[31m\033[1mError: No *_seq_count files found. If clustering was skipped (checkpoint), these files must already exist.\033[0m"
+  echo "Suggestion: remove ${cluster_checkpoint} and rerun to force clustering, or restore *_seq_count files."
+  exit 1
+fi
 
 # Creating the feature table
 ## Adding a header line in each seq_count file
@@ -477,7 +914,7 @@ while IFS= read -r f; do
   sed '1s/^\xEF\xBB\xBF//' "$f" | tr -d '\000' | sed 's/\r$//' > "${f}.clean" && mv "${f}.clean" "$f"
 done < seq_count_files.txt
 
-parallel --jobs "$medaka_threads" --no-run-if-empty add_header :::: seq_count_files.txt
+parallel --jobs "$polisher_threads" --no-run-if-empty add_header :::: seq_count_files.txt
 rm seq_count_files.txt
 
 
@@ -535,18 +972,18 @@ fi
 
 echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mRemoving chimera sequences...\033[0m\n"
 
-find "${clustering_method}_clusters/" -path "${clustering_method}_clusters/medaka*/consensus.fasta" -exec cat {} + > medaka_consensus_seqs.fasta
+find "${clustering_method}_clusters/" -path "${clustering_method}_clusters/${polisher}_*/consensus.fasta" -exec cat {} + > polisher_consensus_seqs.fasta
 
 if [ "$chimera_method" = "ref" ]
 then
    vsearch \
-      --uchime_ref medaka_consensus_seqs.fasta \
+      --uchime_ref polisher_consensus_seqs.fasta \
       --db ${chimera_db} \
       --nonchimeras rep_seqs.fasta
 elif [ "$chimera_method" = "denovo" ]
 then
    vsearch \
-      --uchime_denovo medaka_consensus_seqs.fasta \
+      --uchime_denovo polisher_consensus_seqs.fasta \
       --nonchimeras rep_seqs.fasta
 fi
 
@@ -555,15 +992,24 @@ if [ -e "rep_seqs.fasta" ]
 then
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mChimera sequences removed! \033[0m\n"
 else
-   echo -ne "\n\033[31m\033[1mError: the creation of the feature table failed. \033[0m\n\n"
+   echo -ne "\n\033[31m\033[1mError: chimera filtering failed. \033[0m\n\n"
    echo -ne "Please consult the help menu.\n"
    exit;
 fi
 
-# Checking that every nucleotide is uppercase
+# Ensuring uppercase nucleotides and simplifying headers to keep only the read ID
 
-awk '{if ($0 ~ /^>/) {print $0} else {print toupper($0)}}' rep_seqs.fasta > rep_seqs.fasta_tmp
-mv rep_seqs.fasta_tmp rep_seqs.fasta
+awk '
+  /^>/ {
+     sub(/^>/, "", $0)
+     split($0, a, /[ \t]+/)
+     print ">" a[1]
+     next
+  }
+  {
+     print toupper($0)
+  }
+' rep_seqs.fasta > rep_seqs.fasta_tmp && mv rep_seqs.fasta_tmp rep_seqs.fasta
 
 # Sanitize Global_table (remove NULs/CRLF)
 tr -d '\000' < Global_table | sed 's/\r$//' > Global_table_tmp && mv Global_table_tmp Global_table
@@ -574,19 +1020,6 @@ tr -d '\000' < Global_table | sed 's/\r$//' > Global_table_tmp && mv Global_tabl
   | grep -a -F -f - Global_table
 } > rep_table.tsv
 
-# Clean-up
-
-if [ ${delete_non_essential} = "yes" ]
-then
-   find . -maxdepth 1 -type f -name "*_seq_count" -exec rm {} +
-else
-   mkdir -p cluster_seq_count_folder
-   find . -maxdepth 1 -type f -name "*_seq_count" -exec mv {} cluster_seq_count_folder \;
-fi
-
-rm clusters_seqids_linking_table
-rm Global_table
-rm medaka_consensus_seqs.fasta
 
 
 # Data import into QIIME2
@@ -653,7 +1086,7 @@ then
    elif [[ "$ARCH" == "aarch64" ]]
    then
       biom convert -i rep_table.tsv -o rep_table.biom --table-type "OTU table" --to-hdf5
-      
+
       # Creation of the metadata table
       {
          echo -e "sample-id\tsample-name"
@@ -701,7 +1134,7 @@ then
       echo "  --assay assay1 \\"
       echo "  --phyloseq yes"
       echo
-   
+
    else
       echo -ne "\n\033[31m\033[1mError: Unknown system architecture '$ARCH'. Unable to decide QIIME2 strategy.\033[0m\n"
       exit 1
@@ -722,27 +1155,50 @@ else
    echo
 fi
 
+
+# Clean-up
 if [ ${delete_non_essential} = "yes" ]
 then
-    rm *read_distribution.tsv
-    rm LengthvsQualityScatterPlot*
-    rm -r HQ
-    rm -r ${clustering_method}_clusters
+   rm *read_distribution.tsv
+   rm LengthvsQualityScatterPlot*
+   rm -r HQ
+   rm -r ${clustering_method}_clusters
+   find . -maxdepth 1 -type f -name "*_seq_count" -exec rm {} +
+else
+   mkdir -p cluster_seq_count_folder
+   find . -maxdepth 1 -type f -name "*_seq_count" -exec mv {} cluster_seq_count_folder \;
+fi
+
+rm clusters_seqids_linking_table
+rm Global_table
+rm polisher_consensus_seqs.fasta
+find /data -maxdepth 1 -type d -name '.temp_dorado_model-*' -exec rm -rf {} +
+find "${clustering_method}_clusters" -maxdepth 1 -type d -name 'tmp_dorado_*' -exec rm -rf {} +
+find . -maxdepth 1 -type d -name '.temp_dorado_model-*' -exec rm -rf {} +
+if [ -n "${DORADO_MODELS_DIR:-}" ]
+then
+   rm -rf "${DORADO_MODELS_DIR}" 2>/dev/null
 fi
 
 
+# Remove clustering checkpoint after a successful full run
+rm -f "${cluster_checkpoint}"
+
+# Unset variables
 unset HQ_fastq
 unset clustering_method
 unset clustering_id
 unset clustering_threads
 unset fastq_folder
 unset n_subsampled_reads
-unset medaka_batchsize
-unset medaka_threads
-unset medaka_model
+unset polisher_batchsize
+unset polisher_threads
+unset polisher_model
+unset polisher
 unset chimera_db
 unset qiime2_import
 unset delete_non_essential
 unset chimera_method
 unset ARCH
 unset verbose
+unset cluster_checkpoint

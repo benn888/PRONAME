@@ -77,7 +77,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_taxonomy from the PRONAME pipeline, version 2.1.4\n\n"
+    echo -ne "proname_taxonomy from the PRONAME pipeline, version 2.2.0\n\n"
 }
 
 evalue="0.001"
@@ -162,7 +162,7 @@ exec_cmd() {
 
 
 
-if [ -f "rep_seqs.qza" ]
+if [[ "${query_seqs}" == *.qza ]]
 then
    if [ ! "$query_table" ] || [ ! "$metadata" ]
    then
@@ -189,15 +189,66 @@ then
       exit 1
    fi
 
-   blastn \
-     -query dna-sequences.fasta \
-     -db ${db} \
-     -num_threads ${num_threads} \
-     -max_target_seqs 15 \
-     -evalue ${evalue} \
-     -perc_identity ${perc_identity} \
-     -outfmt "6 qacc saccver qcovs" \
-     -out blastn_outfile.tsv
+   # ------------------------------
+   # BLASTN: chunked parallel mode
+   # ------------------------------
+
+   # Tuning (kept minimal): threads per BLAST job
+   THREADS_PER_JOB=8
+   # Total jobs derived from requested threads
+   JOBS=$(( num_threads / THREADS_PER_JOB ))
+   [ "${JOBS}" -lt 1 ] && JOBS=1
+
+   # If too few jobs, keep original single BLAST behavior
+   if [ "${JOBS}" -lt 2 ]; then
+     blastn \
+       -query dna-sequences.fasta \
+       -db ${db} \
+       -num_threads ${num_threads} \
+       -max_target_seqs 15 \
+       -evalue ${evalue} \
+       -perc_identity ${perc_identity} \
+       -outfmt "6 qacc saccver qcovs" \
+       -out blastn_outfile.tsv
+   else
+     CHUNK_DIR="./blast_chunks_${assay_name}"
+     rm -rf "${CHUNK_DIR}" >/dev/null 2>&1
+     mkdir -p "${CHUNK_DIR}"
+
+     # Split FASTA into N parts
+     seqkit split2 -p "${JOBS}" -O "${CHUNK_DIR}" dna-sequences.fasta >/dev/null 2>&1
+
+     # Run BLAST per chunk in parallel
+     rm -f "${CHUNK_DIR}"/*.tsv >/dev/null 2>&1
+     for chunk in "${CHUNK_DIR}"/*.fasta; do
+       blastn \
+         -query "${chunk}" \
+         -db ${db} \
+         -num_threads ${THREADS_PER_JOB} \
+         -max_target_seqs 15 \
+         -evalue ${evalue} \
+         -perc_identity ${perc_identity} \
+         -outfmt "6 qacc saccver qcovs" \
+         -out "${chunk}.tsv" &
+     done
+
+     # Wait for all BLAST jobs; fail if any failed
+     fail=0
+     for pid in $(jobs -p); do
+       wait "${pid}" || fail=1
+     done
+     if [ "${fail}" -ne 0 ]; then
+       echo -ne "\n\033[31m\033[1mError: one or more BLAST chunk jobs failed.\033[0m\n"
+       exit 1
+     fi
+
+     # Merge
+     cat "${CHUNK_DIR}"/*.tsv > blastn_outfile.tsv
+
+     # Cleanup
+     rm -rf "${CHUNK_DIR}"
+   fi
+
 
    # Removing matches below the query_cover threshold
 
@@ -248,9 +299,30 @@ then
       sed 's/;//g' rep_seqs.fasta > rep_seqs_for_nwk.fasta
       awk 'NR==1 {print} NR>1 {gsub(/;/, ""); print}' rep_table.tsv > rep_table_for_nwk.tsv
 
-      exec_cmd "mafft --auto rep_seqs_for_nwk.fasta > aligned_seqs.fasta"
-      exec_cmd "fasttree -nt aligned_seqs.fasta > phy_tree.nwk"
-      exec_cmd "Rscript /opt/scripts/generate_phyloseq.R rep_table_for_nwk.tsv taxonomy_${assay_name}_blastn_for_nwk.tsv rep_seqs_for_nwk.fasta phy_tree.nwk"
+      exec_cmd "mafft --auto --thread ${num_threads} rep_seqs_for_nwk.fasta > aligned_seqs.fasta"
+      if command -v FastTreeMP >/dev/null 2>&1
+      then
+         exec_cmd "OMP_NUM_THREADS=${num_threads} FastTreeMP -nt aligned_seqs.fasta > phy_tree.nwk"
+      else
+         exec_cmd "fasttree -nt aligned_seqs.fasta > phy_tree.nwk"
+      fi
+
+      if [ -n "${metadata}" ] && [ -f "${metadata}" ]
+      then
+         exec_cmd "Rscript /opt/scripts/generate_phyloseq.R \
+            rep_table_for_nwk.tsv \
+            taxonomy_${assay_name}_blastn_for_nwk.tsv \
+            rep_seqs_for_nwk.fasta \
+            phy_tree.nwk \
+            \"${metadata}\""
+      else
+         exec_cmd "Rscript /opt/scripts/generate_phyloseq.R \
+            rep_table_for_nwk.tsv \
+            taxonomy_${assay_name}_blastn_for_nwk.tsv \
+            rep_seqs_for_nwk.fasta \
+            phy_tree.nwk"
+      fi
+
       rm phy_tree.nwk
       rm aligned_seqs.fasta
       rm *for_nwk*
@@ -350,15 +422,57 @@ then
 else
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mCarrying out the taxonomic analysis...\033[0m\n"
 
-   blastn \
-     -query ${query_seqs} \
-     -db ${db} \
-     -num_threads ${num_threads} \
-     -max_target_seqs 15 \
-     -evalue ${evalue} \
-     -perc_identity ${perc_identity} \
-     -outfmt "6 qacc saccver qcovs" \
-     -out blastn_outfile.tsv
+   # ------------------------------
+   # BLASTN: chunked parallel mode
+   # ------------------------------
+
+   THREADS_PER_JOB=8
+   JOBS=$(( num_threads / THREADS_PER_JOB ))
+   [ "${JOBS}" -lt 1 ] && JOBS=1
+
+   if [ "${JOBS}" -lt 2 ]; then
+     blastn \
+       -query ${query_seqs} \
+       -db ${db} \
+       -num_threads ${num_threads} \
+       -max_target_seqs 15 \
+       -evalue ${evalue} \
+       -perc_identity ${perc_identity} \
+       -outfmt "6 qacc saccver qcovs" \
+       -out blastn_outfile.tsv
+   else
+     CHUNK_DIR="./blast_chunks_${assay_name}"
+     rm -rf "${CHUNK_DIR}" >/dev/null 2>&1
+     mkdir -p "${CHUNK_DIR}"
+
+     seqkit split2 -p "${JOBS}" -O "${CHUNK_DIR}" "${query_seqs}" >/dev/null 2>&1
+
+     rm -f "${CHUNK_DIR}"/*.tsv >/dev/null 2>&1
+     for chunk in "${CHUNK_DIR}"/*.fasta; do
+       blastn \
+         -query "${chunk}" \
+         -db ${db} \
+         -num_threads ${THREADS_PER_JOB} \
+         -max_target_seqs 15 \
+         -evalue ${evalue} \
+         -perc_identity ${perc_identity} \
+         -outfmt "6 qacc saccver qcovs" \
+         -out "${chunk}.tsv" &
+     done
+
+     fail=0
+     for pid in $(jobs -p); do
+       wait "${pid}" || fail=1
+     done
+     if [ "${fail}" -ne 0 ]; then
+       echo -ne "\n\033[31m\033[1mError: one or more BLAST chunk jobs failed.\033[0m\n"
+       exit 1
+     fi
+
+     cat "${CHUNK_DIR}"/*.tsv > blastn_outfile.tsv
+     rm -rf "${CHUNK_DIR}"
+   fi
+
 
    # Removing matches below the query_cover threshold
 
@@ -402,9 +516,30 @@ else
       sed 's/;//g' rep_seqs.fasta > rep_seqs_for_nwk.fasta
       awk 'NR==1 {print} NR>1 {gsub(/;/, ""); print}' rep_table.tsv > rep_table_for_nwk.tsv
 
-      exec_cmd "mafft --auto rep_seqs_for_nwk.fasta > aligned_seqs.fasta"
-      exec_cmd "fasttree -nt aligned_seqs.fasta > phy_tree.nwk"
-      exec_cmd "Rscript /opt/scripts/generate_phyloseq.R rep_table_for_nwk.tsv taxonomy_${assay_name}_blastn_for_nwk.tsv rep_seqs_for_nwk.fasta phy_tree.nwk"
+      exec_cmd "mafft --auto --thread ${num_threads} rep_seqs_for_nwk.fasta > aligned_seqs.fasta"
+      if command -v FastTreeMP >/dev/null 2>&1
+      then
+         exec_cmd "OMP_NUM_THREADS=${num_threads} FastTreeMP -nt aligned_seqs.fasta > phy_tree.nwk"
+      else
+         exec_cmd "fasttree -nt aligned_seqs.fasta > phy_tree.nwk"
+      fi
+      
+      if [ -n "${metadata}" ] && [ -f "${metadata}" ]
+      then
+         exec_cmd "Rscript /opt/scripts/generate_phyloseq.R \
+            rep_table_for_nwk.tsv \
+            taxonomy_${assay_name}_blastn_for_nwk.tsv \
+            rep_seqs_for_nwk.fasta \
+            phy_tree.nwk \
+            \"${metadata}\""
+      else
+         exec_cmd "Rscript /opt/scripts/generate_phyloseq.R \
+            rep_table_for_nwk.tsv \
+            taxonomy_${assay_name}_blastn_for_nwk.tsv \
+            rep_seqs_for_nwk.fasta \
+            phy_tree.nwk"
+      fi
+      
       rm phy_tree.nwk
       rm aligned_seqs.fasta
       rm *for_nwk*

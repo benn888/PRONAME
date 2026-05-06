@@ -4,41 +4,51 @@ import os
 import argparse
 from Bio import SeqIO
 
-def delete_singletons(cluster_folder):
-    # Browsing through all the files of the cluster folder
+def delete_small_clusters(cluster_folder, min_reads):
+    """
+    Delete cluster files containing less than 'min_reads' sequences.
+    By default, min_reads = 2 => removes singletons.
+    """
     for file in os.listdir(cluster_folder):
-        # Keep only files named like "clusterX" (no extension)
+        # Keep only files named as "clusterX" (without extension)
         if not file.startswith("cluster") or '.' in file:
             continue
 
         file_path = os.path.join(cluster_folder, file)
-        # Reading the fasta file
+
         with open(file_path, "r") as f:
             records = list(SeqIO.parse(f, "fasta"))
 
-        # Checking the number of sequences
-        if len(records) <= 1:
-            # Delete the clusterX file
+        if len(records) < min_reads:
+            # Delete the file clusterX
             os.remove(file_path)
-            print(f"The file {file} has been deleted because it contains only one sequence.")
+            print(f"The file {file} has been deleted because it contains only {len(records)} sequence(s).")
 
-            # Build the corresponding centroid filename
+            # Build the corresponding centroid name
             centroid_file = f"centroid_{file}.fasta"
             centroid_path = os.path.join(cluster_folder, centroid_file)
 
-            # Delete the centroid file if it exists
+            # Remove the centroid if it exists
             if os.path.exists(centroid_path):
                 os.remove(centroid_path)
         else:
-            print(f"The file {file} contains multiple sequences and was not deleted.")
+            print(f"The file {file} contains {len(records)} sequences and was not deleted.")
 
 if __name__ == "__main__":
-    # Definition of the argument parser
-    parser = argparse.ArgumentParser(description="Remove fasta files containing only one sequence.")
+    parser = argparse.ArgumentParser(
+        description="Remove cluster fasta files containing fewer than a given number of sequences."
+    )
     parser.add_argument("cluster_folder", help="Path to the folder containing fasta files")
+    parser.add_argument(
+        "--min-reads",
+        type=int,
+        default=2,
+        help="Minimum number of sequences required to keep a cluster (default: 2 => remove singletons)."
+    )
 
-    # Parse command-line arguments
     args = parser.parse_args()
 
-    # Call the delete_singletons function with the folder path provided by the user
-    delete_singletons(args.cluster_folder)
+    if args.min_reads < 1:
+        raise ValueError("The --min-reads value must be >= 1.")
+
+    delete_small_clusters(args.cluster_folder, args.min_reads)

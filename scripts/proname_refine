@@ -40,10 +40,9 @@ Help()
    echo -ne "\t--polisher\t\tPolishing engine to use. 'medaka' is recommended for CPU-only or small datasets.\n"
    echo -ne "\t\t\t\t'dorado' is recommended for larger datasets and when move tables are available in the FASTQ headers.\n"
    echo -ne "\t\t\t\t[Options: \"medaka\" or \"dorado\", Default: \"medaka\"]\n"
+   echo -ne "\t\t\t\tOur tests have shown that Dorado, when using move tables, achieves higher polishing accuracy than Medaka.\n"
    echo -ne "\t\t\t\tMove tables will only be present if your reads were basecalled with Dorado using\n"
-   echo -ne "\t\t\t\t'--emit-fastq --emit-moves' and no adapter/primer trimming was performed inside PRONAME.\n"
-   echo -ne "\t\t\t\tIf adapter or primer trimming was done in proname_import, move tables are removed or\n"
-   echo -ne "\t\t\t\tinvalidated and Dorado polishing will effectively run without using moves.\n"
+   echo -ne "\t\t\t\t'--emit-fastq' and '--emit-moves'.\n"
    echo -ne "\t\t\t\tWhen using Dorado polishing, the polishing model is automatically selected by Dorado\n"
    echo -ne "\t\t\t\tbased on the tags present in the read headers (propagated from Dorado basecalling).\n"
    echo -ne "\t\t\t\tThis is mainly true for move tables that must be present in read headers if you want them to be \n"
@@ -54,13 +53,13 @@ Help()
    echo -ne "\t\t\t\tbe reduced. For Dorado, setting this to 0 enables automatic batch size optimisation based on available hardware.\n"
    echo -ne "\t\t\t\t[Default: 100 for Medaka, 0 for Dorado]\n"
    echo
-   echo -ne "\t--polisherthreads\t\tNumber of threads to use for the polishing step. If running Medaka on a CPU, it is recommended to \n"
+   echo -ne "\t--polisherthreads\tNumber of threads to use for the polishing step. If running Medaka on a CPU, it is recommended to \n"
    echo -ne "\t\t\t\tset this value to the maximum number of available threads. PRONAME will automatically split the polishing process \n"
    echo -ne "\t\t\t\tinto multiple parallel jobs to significantly increase the analysis speed. Each job uses 2 threads for Medaka, with \n"
    echo -ne "\t\t\t\t2 additional threads allocated to each job for parallel overhead. \n"
    echo -ne "\t\t\t\tIf running on a GPU, this setting has little impact, as the main computation is handled by PyTorch and CUDA. [Default: 4]\n"
    echo
-   echo -ne "\t--polishermodel\t\tModel name to use for consensus polishing when '--polisher medaka'.\n"
+   echo -ne "\t--polishermodel\t\tModel name to use for consensus polishing when '--polisher medaka' is used.\n"
    echo -ne "\t\t\t\tThis should be a valid Medaka model name (e.g. r1041_e82_400bps_sup_v5.2.0);\n"
    echo -ne "\t\t\t\tAvailable Medaka models can be listed using 'medaka tools list_models'.\n"
    echo -ne "\t\t\t\tWhen '--polisher dorado' is used, this argument is ignored: Dorado selects the polishing\n"
@@ -78,7 +77,7 @@ Help()
    echo
    echo -ne "\t--version\t\tPrint the version of the pipeline.\n"
    echo
-   echo -ne "\t--verbose\tActivate verbose/debug mode (no redirections).\n"
+   echo -ne "\t--verbose\t\tActivate verbose/debug mode (no redirections).\n"
    echo
    echo -ne "\t--help\t\t\tPrint this help."
    echo
@@ -107,7 +106,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_refine from the PRONAME pipeline, version 2.2.0\n\n"
+    echo -ne "proname_refine from the PRONAME pipeline, version 2.3.0\n\n"
 }
 
 
@@ -278,6 +277,8 @@ cleanup_failed_run_artifacts() {
   find "${d}" -maxdepth 1 -type f -name 'dorado_*.sorted.bam' -delete
   find "${d}" -maxdepth 1 -type f -name 'dorado_*.sorted.bam.bai' -delete
   find "${d}" -maxdepth 1 -type d -name 'tmp_dorado_*' -exec rm -rf {} +
+  rm -f "${d}/.medaka_polishing_progress" "${d}/.dorado_polishing_progress" 2>/dev/null
+  rm -rf "${d}/.medaka_polishing_progress.lock" "${d}/.dorado_polishing_progress.lock" 2>/dev/null
 
   # 3) Remove final outputs that could be inconsistent from a partial run
   rm -f rep_seqs.fasta rep_table.tsv rep_table.qza rep_seqs.qza sample_metadata.tsv 2>/dev/null
@@ -440,7 +441,15 @@ else
       # Splitting clusters into 2 files
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mSplitting clusters into two files...\033[0m\n"
 
-      for i in vsearch_clusters/*;do seqkit split -p 2 $i;done
+      for i in vsearch_clusters/*
+      do
+         if $verbose
+         then
+            seqkit split -p 2 "$i"
+         else
+            seqkit split -p 2 "$i" >/dev/null 2>&1
+         fi
+      done
 
       if find vsearch_clusters -name '*split*' | grep -q . 1> /dev/null 2>&1
       then
@@ -554,6 +563,48 @@ else
 fi
 
 
+# Progress counter for parallel polishing
+init_polishing_progress() {
+   local total="$1"
+   local label="$2"
+   local progress_file="$3"
+
+   echo "0" > "$progress_file"
+   rm -rf "${progress_file}.lock" 2>/dev/null
+
+   echo -ne "\033[38;5;228m[$(date +'%Y-%m-%d || %H:%M:%S')] : ${label} polishing progress: 0/${total} clusters polished (0%).\033[0m\n"
+}
+
+update_polishing_progress() {
+   local progress_file="$1"
+   local total="$2"
+   local label="$3"
+   local cluster_id="$4"
+   local lock_dir="${progress_file}.lock"
+
+   # Simple lock compatible with parallel jobs
+   while ! mkdir "$lock_dir" 2>/dev/null
+   do
+      sleep 0.1
+   done
+
+   local done_count
+   done_count=$(cat "$progress_file" 2>/dev/null || echo 0)
+   done_count=$((done_count + 1))
+   echo "$done_count" > "$progress_file"
+
+   local pct
+   pct=$(( done_count * 100 / total ))
+
+   echo -ne "\033[38;5;228m[$(date +'%Y-%m-%d || %H:%M:%S')] : ${label} polishing progress: ${done_count}/${total} clusters polished (${pct}%). Last completed: ${cluster_id}\033[0m\n"
+
+   rmdir "$lock_dir" 2>/dev/null
+}
+
+export -f init_polishing_progress
+export -f update_polishing_progress
+
+
 # Defining the global function for parallel polishing
 medaka_polishing() {
    local polisher_threads="${polisher_threads}"
@@ -572,7 +623,7 @@ medaka_polishing() {
    then
       PARALLEL_JOBS=1
    fi
-   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Launching polishing in parallel using ${PARALLEL_JOBS} jobs (4 threads per job)."
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Launching polishing in parallel using ${PARALLEL_JOBS} jobs (4 threads per job).\n"
 
    # Generating cluster IDs
    find ${clustering_method}_clusters -type f -name "subreads_cluster*.fasta" | \
@@ -584,10 +635,17 @@ medaka_polishing() {
       exit 1
    fi
 
+   TOTAL_CLUSTERS=$(wc -l < cluster_ids.txt)
+   PROGRESS_FILE="${clustering_method}_clusters/.medaka_polishing_progress"
+
+   init_polishing_progress "$TOTAL_CLUSTERS" "Medaka" "$PROGRESS_FILE"
+
    # Exporting variables for parallel
    export polisher_model
    export polisher_batchsize
    export clustering_method
+   export TOTAL_CLUSTERS
+   export PROGRESS_FILE
 
    # Polishing function
    polish_cluster() {
@@ -599,7 +657,15 @@ medaka_polishing() {
          -b "${polisher_batchsize}" \
          -t 2 \
          -m "${polisher_model}" \
-         -o ${clustering_method}_clusters/medaka_${cluster_id}
+         -o ${clustering_method}_clusters/medaka_${cluster_id} || return 1
+
+      if [ ! -s "${clustering_method}_clusters/medaka_${cluster_id}/consensus.fasta" ]
+      then
+         echo "[ERROR] No consensus.fasta found for cluster ${cluster_id}" >&2
+         return 1
+      fi
+
+      update_polishing_progress "$PROGRESS_FILE" "$TOTAL_CLUSTERS" "Medaka" "$cluster_id"
 
    }
    export -f polish_cluster
@@ -613,6 +679,8 @@ medaka_polishing() {
    fi
 
    rm -f cluster_ids.txt
+   rm -f "$PROGRESS_FILE"
+   rm -rf "${PROGRESS_FILE}.lock" 2>/dev/null
 }
 
 dorado_polishing() {
@@ -633,6 +701,11 @@ dorado_polishing() {
       rm -f cluster_ids.txt
       exit 1
    fi
+
+   TOTAL_CLUSTERS=$(wc -l < cluster_ids.txt)
+   PROGRESS_FILE="${draft_dir}/.dorado_polishing_progress"
+
+   init_polishing_progress "$TOTAL_CLUSTERS" "Dorado" "$PROGRESS_FILE"
 
    # Thread allocation: similar spirit as Medaka
    # 4 threads per job: 2 for Dorado (aligner + polish), 2 for samtools
@@ -736,8 +809,8 @@ dorado_polishing() {
       echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : Dorado warm-up on cluster ${warmup_id} (models dir: ${DORADO_MODELS_DIR})...\n"
 
       dorado aligner --threads "${DORADO_THREADS_PER_JOB}" "${warmup_draft}" "${warmup_reads}" \
-        | samtools sort --threads "${SAMTOOLS_THREADS_PER_JOB}" -o "${warmup_bam}"
-      samtools index "${warmup_bam}"
+        | samtools sort --threads "${SAMTOOLS_THREADS_PER_JOB}" -o "${warmup_bam}" || exit 1
+      samtools index "${warmup_bam}" || exit 1
 
       mkdir -p "${warmup_out}"
       dorado polish \
@@ -764,15 +837,15 @@ dorado_polishing() {
 
       if [ ! -s "$reads_fastq" ]
       then
-         echo "[WARNING] Missing or empty $reads_fastq for cluster ${cluster_id}, skipping." >&2
-         return 0
+         echo "[ERROR] Missing or empty $reads_fastq for cluster ${cluster_id}." >&2
+         return 1
       fi
 
       # Alignment + sorted BAM, with controlled threads
       dorado aligner --threads "${DORADO_THREADS_PER_JOB}" "$draft" "$reads_fastq" \
-        | samtools sort --threads "${SAMTOOLS_THREADS_PER_JOB}" -o "$sorted_bam"
+        | samtools sort --threads "${SAMTOOLS_THREADS_PER_JOB}" -o "$sorted_bam" || return 1
 
-      samtools index "$sorted_bam"
+      samtools index "$sorted_bam" || return 1
 
       # Dorado polishing (threads limited) in a cluster-specific temporary working directory
       mkdir -p "$outdir"
@@ -810,10 +883,13 @@ dorado_polishing() {
          echo "[ERROR] No consensus output found for cluster ${cluster_id}" >&2
          return 1
       fi
+
+      update_polishing_progress "$PROGRESS_FILE" "$TOTAL_CLUSTERS" "Dorado" "$cluster_id"
    }
 
    export -f dorado_polish_cluster
    export draft_dir hq_fastq DORADO_THREADS_PER_JOB SAMTOOLS_THREADS_PER_JOB polisher_batchsize GLOBAL_RG DORADO_MODELS_DIR
+   export TOTAL_CLUSTERS PROGRESS_FILE
 
    # Parallel polishing, stop as soon as one cluster fails
    if ! parallel --jobs "${JOBS}" --halt now,fail=1 dorado_polish_cluster :::: cluster_ids.txt
@@ -824,6 +900,8 @@ dorado_polishing() {
    fi
 
    rm -f cluster_ids.txt
+   rm -f "$PROGRESS_FILE"
+   rm -rf "${PROGRESS_FILE}.lock" 2>/dev/null
 }
 
 

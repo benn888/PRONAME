@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -o pipefail
+
 echo -ne "\n**************************************************************************************************************\n"
 echo -ne "* You are executing the \033[1mproname_filter\033[0m script, which is the second part of the \033[1mPRONAME\033[0m pipeline.             *\n"
 echo -ne "*                                                                                                            *  \n"
@@ -68,7 +70,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_filter from the PRONAME pipeline, version 2.2.0\n\n"
+    echo -ne "proname_filter from the PRONAME pipeline, version 2.3.0\n\n"
 }
 
 # Variable default values
@@ -135,6 +137,13 @@ if [ ! "$data_type" ] || [ ! "$filt_min_length" ] || [ ! "$filt_max_length" ] ||
   exit;
 fi
 
+if [[ "$data_type" != "simplex" && "$data_type" != "duplex" && "$data_type" != "both" ]]
+then
+   echo -ne "\n\033[31m\033[1mError: the value of --datatype must be 'simplex', 'duplex' or 'both'.\033[0m\n\n"
+   echo -ne "Please consult the help menu with 'proname_filter --help'\n"
+   exit 1
+fi
+
 if [[ "$plot_format" != "png" && "$plot_format" != "html" ]]
 then
    echo -ne "\n\033[31m\033[1mError: the value of the --plotformat argument must be 'png' or 'html'.\033[0m\n\n"
@@ -184,6 +193,51 @@ then
 fi
 
 
+# Quality filtering function using Chopper
+run_chopper_filter() {
+   local input_fastq="$1"
+   local output_fastq="$2"
+   local label="$3"
+
+   if [ -z "$input_fastq" ] || [ ! -s "$input_fastq" ]
+   then
+      echo -ne "\n\033[31m\033[1mError: input FASTQ for ${label} filtering was not found or is empty.\033[0m\n\n"
+      exit 1
+   fi
+
+   if ! chopper \
+      -t "${num_threads}" \
+      -q "${filt_min_quality}" \
+      -l "${filt_min_length}" \
+      --maxlength "${filt_max_length}" \
+      -i "${input_fastq}" \
+      > "${output_fastq}"
+   then
+      echo -ne "\n\033[31m\033[1mError: Chopper filtering failed for ${label} reads.\033[0m\n\n"
+      exit 1
+   fi
+
+   if [ ! -s "${output_fastq}" ]
+   then
+      echo -ne "\n\033[31m\033[1mError: Chopper filtering produced an empty FASTQ file for ${label} reads.\033[0m\n\n"
+      echo -ne "Please check your length and quality thresholds.\n"
+      exit 1
+   fi
+
+   # Safety check for Dorado move tables
+   # If mv tags were present before filtering, they should still be present after filtering.
+   if grep -m 1 -qE '(^@|[[:blank:]])mv:B:[cC],' "${input_fastq}"
+   then
+      if ! grep -m 1 -qE '(^@|[[:blank:]])mv:B:[cC],' "${output_fastq}"
+      then
+         echo -ne "\n\033[31m\033[1mError: move tables were detected before Chopper filtering but not after filtering.\033[0m\n\n"
+         echo -ne "This suggests that FASTQ headers were unexpectedly modified. Dorado move-aware polishing may no longer be possible.\n"
+         exit 1
+      fi
+   fi
+}
+
+
 ###############
 # Duplex data #
 ###############
@@ -194,21 +248,12 @@ then
 
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mFiltering reads according to quality parameters provided...\033[0m\n"
 
-   mkdir HQ
+   mkdir -p HQ
 
-   cat ${duplex_fastq} | NanoFilt \
-     --length ${filt_min_length} \
-     --maxlength ${filt_max_length} \
-     --quality ${filt_min_quality} > HQ/HQ_duplex_seqs.fastq
+   run_chopper_filter "${duplex_fastq}" "HQ/HQ_duplex_seqs.fastq" "duplex"
 
-   if [ -e "HQ/HQ_duplex_seqs.fastq" ]
-   then
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mQuality filtering completed! \033[0m\n"
-   else
-      echo -ne "\n\033[31m\033[1mError: Quality-filtering failed. \033[0m\n\n"
-      echo -ne "Please consult the help menu.\n"
-      exit;
-   fi
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mQuality filtering completed! \033[0m\n"
+
 
    if [ "$no_counting" != "yes" ]
    then
@@ -265,7 +310,8 @@ then
          echo "proname_refine \\"
          echo "  --clusterid 0.90 \\"
          echo "  --inputpath RawData \\"
-         echo "  --medakamodel r1041_e82_400bps_sup_v4.2.0 \\"
+         echo "  --polisher medaka \\"
+         echo "  --polishermodel r1041_e82_400bps_sup_v5.2.0 \\"
          echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
          echo "  --qiime2import yes"
          echo
@@ -282,7 +328,8 @@ then
       echo "proname_refine \\"
       echo "  --clusterid 0.90 \\"
       echo "  --inputpath RawData \\"
-      echo "  --medakamodel r1041_e82_400bps_sup_v5.2.0 \\"
+      echo "  --polisher medaka \\"
+      echo "  --polishermodel r1041_e82_400bps_sup_v5.2.0 \\"
       echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
       echo "  --qiime2import yes"
       echo
@@ -300,21 +347,12 @@ then
 
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mFiltering reads according to quality parameters provided...\033[0m\n"
 
-   mkdir HQ
+   mkdir -p HQ
 
-   cat ${simplex_fastq} | NanoFilt \
-     --length ${filt_min_length} \
-     --maxlength ${filt_max_length} \
-     --quality ${filt_min_quality} > HQ/HQ_simplex_seqs.fastq
+   run_chopper_filter "${simplex_fastq}" "HQ/HQ_simplex_seqs.fastq" "simplex"
 
-   if [ -e "HQ/HQ_simplex_seqs.fastq" ]
-   then
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mQuality filtering completed! \033[0m\n"
-   else
-      echo -ne "\n\033[31m\033[1mError: Quality-filtering failed. \033[0m\n\n"
-      echo -ne "Please consult the help menu.\n"
-      exit;
-   fi
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mQuality filtering completed! \033[0m\n"
+
 
    if [ "$no_counting" != "yes" ]
    then
@@ -372,7 +410,8 @@ then
          echo "proname_refine \\"
          echo "  --clusterid 0.90 \\"
          echo "  --inputpath RawData \\"
-         echo "  --medakamodel r1041_e82_400bps_sup_v4.2.0 \\"
+         echo "  --polisher medaka \\"
+         echo "  --polishermodel r1041_e82_400bps_sup_v5.2.0 \\"
          echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
          echo "  --qiime2import yes"
          echo
@@ -389,7 +428,8 @@ then
       echo "proname_refine \\"
       echo "  --clusterid 0.90 \\"
       echo "  --inputpath RawData \\"
-      echo "  --medakamodel r1041_e82_400bps_sup_v5.2.0 \\"
+      echo "  --polisher medaka \\"
+      echo "  --polishermodel r1041_e82_400bps_sup_v5.2.0 \\"
       echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
       echo "  --qiime2import yes"
       echo
@@ -407,21 +447,12 @@ then
 
    echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;38;5;39mFiltering reads according to quality parameters provided...\033[0m\n"
 
-   mkdir HQ
+   mkdir -p HQ
 
-   cat ${simplex_duplex_fastq} | NanoFilt \
-     --length ${filt_min_length} \
-     --maxlength ${filt_max_length} \
-     --quality ${filt_min_quality} > HQ/HQ_simplex_duplex_seqs.fastq
+   run_chopper_filter "${simplex_duplex_fastq}" "HQ/HQ_simplex_duplex_seqs.fastq" "simplex + duplex"
 
-   if [ -e "HQ/HQ_simplex_duplex_seqs.fastq" ]
-   then
-      echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mQuality filtering completed! \033[0m\n"
-   else
-      echo -ne "\n\033[31m\033[1mError: Quality-filtering failed. \033[0m\n\n"
-      echo -ne "Please consult the help menu.\n"
-      exit;
-   fi
+   echo -ne "[$(date +'%Y-%m-%d || %H:%M:%S')] : \033[1;32mQuality filtering completed! \033[0m\n"
+
 
    # Separating duplex from simplex reads
    seqkit grep -j ${num_threads} -n -r -p ';' HQ/HQ_simplex_duplex_seqs.fastq -o HQ/HQ_duplex_seqs.fastq
@@ -488,7 +519,8 @@ then
          echo "proname_refine \\"
          echo "  --clusterid 0.90 \\"
          echo "  --inputpath RawData \\"
-         echo "  --medakamodel r1041_e82_400bps_sup_v5.2.0 \\"
+         echo "  --polisher medaka \\"
+         echo "  --polishermodel r1041_e82_400bps_sup_v5.2.0 \\"
          echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
          echo "  --qiime2import yes"
          echo
@@ -505,7 +537,8 @@ then
       echo "proname_refine \\"
       echo "  --clusterid 0.90 \\"
       echo "  --inputpath RawData \\"
-      echo "  --medakamodel r1041_e82_400bps_sup_v5.2.0 \\"
+      echo "  --polisher medaka \\"
+      echo "  --polishermodel r1041_e82_400bps_sup_v5.2.0 \\"
       echo "  --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \\"
       echo "  --qiime2import yes"
       echo
@@ -514,9 +547,9 @@ fi
 
 if [ ${delete_non_essential} = "yes" ]
 then
-    rm reads_*.fastq
-    rm simplex_duplex_read_distribution.tsv
-    rm LengthvsQualityScatterPlot*
+    rm -f reads_*.fastq
+    rm -f simplex_duplex_read_distribution.tsv
+    rm -f LengthvsQualityScatterPlot*
 fi
 
 unset data_type

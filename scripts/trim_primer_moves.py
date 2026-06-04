@@ -49,6 +49,27 @@ def parse_args():
             "If exceeded, the script exits with an error. Use -1 to disable this safeguard."
         )
     )
+    parser.add_argument(
+        "--progress-interval",
+        type=int,
+        default=0,
+        help=(
+            "Refresh the progress bar every N trimmed reads encountered. "
+            "If set to 0, the interval is automatically calculated as total_trimmed_reads / 200. "
+            "Use -1 to disable progress reporting. [Default: 0]"
+        )
+    )
+    parser.add_argument(
+        "--progress-steps",
+        type=int,
+        default=200,
+        help=(
+            "Number of progress bar refreshes when --progress-interval is set to 0. "
+            "For example, 200 means that the progress interval will be approximately "
+            "1/200 of the total number of trimmed reads, i.e. one update every 0.5%. "
+            "[Default: 200]"
+        )
+    )
     return parser.parse_args()
 
 
@@ -98,6 +119,40 @@ def read_trimmed_fastq(path: str) -> Dict[str, Tuple[str, str]]:
 def phred_string_to_scores(qual: str):
     """Convert a Phred+33 quality string to a list of integers."""
     return [ord(c) - 33 for c in qual]
+
+
+def print_progress_bar(
+    current: int,
+    total: int,
+    processed: int,
+    errors: int,
+    width: int = 40,
+    force_newline: bool = False,
+):
+    """Print a visual terminal progress bar on stderr."""
+    if total <= 0:
+        pct = 0.0
+        filled = 0
+    else:
+        pct = current / total
+        if pct > 1:
+            pct = 1.0
+        filled = int(width * pct)
+
+    bar = "█" * filled + " " * (width - filled)
+    percent = pct * 100
+
+    end = "\n" if force_newline else "\r"
+
+    print(
+        f"Move-table adjustment: [{bar}] "
+        f"{percent:6.2f}%  "
+        f"{current}/{total} trimmed reads seen | "
+        f"adjusted={processed} | errors={errors}",
+        end=end,
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def adjust_mv_tag(
@@ -223,6 +278,16 @@ def main():
             f"[ERROR] --max-error-reads must be -1 or a non-negative integer, got {args.max_error_reads}."
         )
 
+    if args.progress_interval < -1:
+        raise RuntimeError(
+            f"[ERROR] --progress-interval must be -1, 0, or a positive integer, got {args.progress_interval}."
+        )
+
+    if args.progress_steps < 1:
+        raise RuntimeError(
+            f"[ERROR] --progress-steps must be a positive integer, got {args.progress_steps}."
+        )
+
     trimmed_reads = read_trimmed_fastq(args.fastq)
 
     print(f"[INFO] Opening input BAM: {args.bam}")
@@ -235,18 +300,17 @@ def main():
     processed_reads = 0
     skipped_missing_in_fastq = 0
     skipped_errors = 0
+    total_trimmed_reads = len(trimmed_reads)
+    seen_trimmed_reads = 0
+    last_progress_report = 0
+
+    if args.progress_interval == 0:
+        progress_interval = max(1, total_trimmed_reads // args.progress_steps)
+    else:
+        progress_interval = args.progress_interval
 
     for read in in_bam:
         total_reads += 1
-
-        if total_reads % 250000 == 0:
-            print(
-                f"[INFO] Progress: {total_reads} reads scanned | "
-                f"successfully_processed={processed_reads} | "
-                f"missing_in_fastq={skipped_missing_in_fastq} | "
-                f"errors={skipped_errors}",
-                file=sys.stderr
-            )
 
         qname = read.query_name
 
@@ -254,6 +318,24 @@ def main():
             # Read discarded by cutadapt -> do not keep it
             skipped_missing_in_fastq += 1
             continue
+
+        seen_trimmed_reads += 1
+
+        if (
+            progress_interval > 0
+            and (
+                seen_trimmed_reads == 1
+                or seen_trimmed_reads - last_progress_report >= progress_interval
+                or seen_trimmed_reads == total_trimmed_reads
+            )
+        ):
+            print_progress_bar(
+                current=seen_trimmed_reads,
+                total=total_trimmed_reads,
+                processed=processed_reads,
+                errors=skipped_errors,
+            )
+            last_progress_report = seen_trimmed_reads
 
         trimmed_seq, trimmed_qual_str = trimmed_reads[qname]
 
@@ -349,6 +431,15 @@ def main():
     out_bam.close()
 
     del trimmed_reads
+
+    if progress_interval > 0:
+        print_progress_bar(
+            current=seen_trimmed_reads,
+            total=total_trimmed_reads,
+            processed=processed_reads,
+            errors=skipped_errors,
+            force_newline=True,
+        )
 
     print("\n[INFO] Finished.")
     print(f"[INFO] Total reads in input BAM: {total_reads}")

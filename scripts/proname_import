@@ -95,7 +95,7 @@ Help()
 
 Version()
 {
-    echo -ne "proname_import from the PRONAME pipeline, version 2.2.0\n\n"
+    echo -ne "proname_import from the PRONAME pipeline, version 2.3.0\n\n"
 }
 
 # Variable default values
@@ -103,7 +103,7 @@ num_threads="2"
 no_scatterplot="no"
 no_counting="no"
 sequencing_kit="SQK-LSK114"
-primer_error_rate="0.2"
+primer_error_rate="0.15"
 primer_trimming_mode="soft"
 plot_format="png"
 verbose=false
@@ -400,14 +400,18 @@ then
          fi
 
          # Adjusting moves
-         if ! exec_cmd "python3 /opt/scripts/trim_primer_moves.py \
+         if ! python3 /opt/scripts/trim_primer_moves.py \
             --bam reads_simplex_duplex.with_moves.bam \
             --fastq reads_simplex_duplex.trimmed.fastq \
             --output reads_simplex_duplex.trimmed_with_moves.bam \
-            --max-error-reads 10000"
+            --max-error-reads 10000 \
+            --progress-interval 0 \
+            --progress-steps 200 \
+            > trim_primer_moves.log
          then
             echo -ne "\n\033[31m\033[1m[ERROR] trim_primer_moves.py failed.\033[0m\n"
-            echo -ne "Temporary files were kept for debugging.\n\n"
+            echo -ne "Temporary files were kept for debugging.\n"
+            echo -ne "See trim_primer_moves.log for details.\n\n"
             exit 1
          fi
 

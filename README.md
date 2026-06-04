@@ -28,11 +28,11 @@ To download an image, please run one of the following commands:
 
 - **Command to pull image for amd64 architecture:**  
   ```bash
-   docker pull benn888/proname:v2.2.0-amd64
+   docker pull benn888/proname:v2.3.0-amd64
 
 - **Command to pull image for arm64 architecture:**  
   ```bash
-   docker pull benn888/proname:v2.2.0-arm64
+   docker pull benn888/proname:v2.3.0-arm64
 Note that, depending on your installation, running Docker commands may require `sudo` privileges.
 
 You can run this command to confirm that the image has successfully been downloaded and is available:
@@ -49,7 +49,7 @@ The simplest way to run a new container is to use this command:
 docker run \
    -it \
    --name proname_container \
-   benn888/proname:v2.2.0-<arch>
+   benn888/proname:v2.3.0-<arch>
 ```
 Where `<arch>` should be replaced by `amd64` or `arm64`.
 
@@ -61,7 +61,7 @@ docker run \
    --rm \
    --name proname_container \
    -v /path/to/host/data:/data \
-   benn888/proname:v2.2.0-<arch>
+   benn888/proname:v2.3.0-<arch>
 ```
 where `/path/to/host/data` is the path to the directory on your host machine containing the raw sequencing data, and `/data` is the directory in the container where this data will be accessible. Place any files resulting from the PRONAME analysis in `/data` to access them directly from the host machine.
 
@@ -74,7 +74,7 @@ docker run \
    --gpus all \
    --name proname_container \
    -v /path/to/host/data:/data \
-   benn888/proname:v2.2.0-<arch>
+   benn888/proname:v2.3.0-<arch>
 ```
 
 If your host machine has several GPUs and one is much more powerful than the others, you can specify which GPU should be made available to the container. First identify the GPU device number running `nvidia-smi`, and then replace `--gpus all` with for example `--gpus '"device=0"'` or `--gpus '"device=1"'`.
@@ -225,7 +225,8 @@ The HQ duplex reads will now undergo a serie of processing steps wrapped in the 
 proname_refine \
   --clusterid 0.90 \
   --inputpath RawData \
-  --medakamodel r1041_e82_400bps_sup_v5.2.0 \
+  --polisher medaka \
+  --polishermodel r1041_e82_400bps_sup_v5.2.0 \
   --chimeradb /opt/db/rEGEN-B/rEGEN-B_sequences.fasta \
   --qiime2import yes
 ~~~
